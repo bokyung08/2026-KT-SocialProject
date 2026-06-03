@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./.venv/Scripts/python.exe --version)",
+      "Bash(uv --version)",
+      "Bash(curl -sS -m 20 -L -o /tmp/test_pm.csv \"https://www.data.go.kr/download/15123495/fileData.do?atchFileId=&fileDetailSn=1\" -w \"HTTP %{http_code} | size %{size_download} | type %{content_type}\\\\n\")",
+      "Bash(curl -sS -m 15 -o /dev/null -w \"google HTTP %{http_code}\\\\n\" https://www.google.com)",
+      "Bash(curl -sS -m 15 -o /dev/null -w \"pypi HTTP %{http_code}\\\\n\" https://pypi.org/simple/numpy/)",
+      "Bash(uv pip *)",
+      "Bash(uv add *)",
+      "Bash(./.venv/Scripts/python.exe -c \"import numpy,pandas,matplotlib,scipy,sklearn,seaborn,xgboost,geopandas,osmnx,folium,shapely,pyproj; print\\('imports OK'\\); print\\('xgb',xgboost.__version__,'osmnx',osmnx.__version__,'gpd',geopandas.__version__\\)\")",
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe build_pilot.py)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe build_pilot.py)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -c \"import nbformat; nb=nbformat.read\\('pilot.ipynb',4\\); print\\('cells:',len\\(nb.cells\\)\\); nbformat.validate\\(nb\\); print\\('valid OK'\\)\")",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=600 pilot.ipynb)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -m ipykernel install --user --name proj-pm --display-name \"Python \\(proj-pm\\)\")",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -m jupyter kernelspec list)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.kernel_name=proj-pm --ExecutePreprocessor.timeout=600 pilot.ipynb)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -c ' *)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -m jupyter nbconvert --to notebook --execute --inplace --allow-errors --ExecutePreprocessor.kernel_name=proj-pm --ExecutePreprocessor.timeout=600 pilot.ipynb)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -c \"import pandas as pd; print\\(pd.read_csv\\('data/data_request_spec.csv'\\).to_string\\(\\)\\)\")",
+      "Bash(cd \"C:\\\\Users\\\\BREW\\\\.claude\\\\projects\\\\c--Users-BREW-Downloads-AI-------------proj\\\\memory\" && ls 2>&1 && echo \"---\" && test -f MEMORY.md && echo \"MEMORY.md exists\" || echo \"no MEMORY.md\")",
+      "Read(//c/Users/BREW/.claude/projects/c--Users-BREW-Downloads-AI-------------proj/memory/**)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe build_generate.py)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -m jupyter nbconvert --to notebook --execute --inplace --allow-errors --ExecutePreprocessor.kernel_name=proj-pm --ExecutePreprocessor.timeout=600 01_generate_dataset.ipynb)",
+      "Bash(PYTHONUTF8=1 ./.venv/Scripts/python.exe -c \"import pandas as pd; d=pd.read_csv\\('data/accidents_synth.csv'\\); print\\(d.shape\\); print\\(d.head\\(3\\).to_string\\(\\)\\); print\\('dt range',d.datetime.min\\(\\),d.datetime.max\\(\\)\\)\")"
+    ]
+  }
+}

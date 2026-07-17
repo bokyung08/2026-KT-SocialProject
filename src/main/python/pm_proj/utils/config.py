@@ -22,6 +22,29 @@ WGS84 = "EPSG:4326"
 _PROJECT_ROOT = Path(__file__).resolve().parents[5]
 
 
+def _load_dotenv() -> None:
+    """프로젝트 루트의 .env 를 os.environ 에 주입(의존성 없는 경량 로더).
+
+    - 이미 설정된 환경변수는 덮어쓰지 않는다(실제 셸 값 우선).
+    - `KEY=VALUE` 형식, `#` 주석과 빈 줄 무시, 양끝 따옴표 제거.
+    없으면 조용히 무시. 민감정보(.env)는 gitignore 대상.
+    """
+    path = _PROJECT_ROOT / ".env"
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+# StreetViewConfig 등 아래 dataclass 기본값이 os.environ 를 읽기 전에 .env 를 먼저 로드.
+_load_dotenv()
+
+
 def _default_data_dir() -> Path:
     """데이터 다운로드 루트. 환경변수 PM_DATA_DIR 우선, 없으면 프로젝트 루트의 data/.
 

@@ -28,10 +28,10 @@ PM/자전거 전용 다발지역 API 는 없으므로, 가장 근접한 **이륜
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from typing import TYPE_CHECKING, Iterable
+from urllib.parse import unquote
 
 import pandas as pd
 
@@ -62,7 +62,10 @@ def _api_key(explicit: str | None) -> str:
             "KoROAD 인증키가 필요합니다. https://opendata.koroad.or.kr 에서 발급 후 "
             "환경변수 KOROAD_API_KEY 로 지정하세요 (또는 api_key 인자)."
         )
-    return key
+    # 포털이 주는 키는 URL 인코딩(%2B,%2F)되어 있을 수 있다. requests 가 params dict 를
+    # 다시 인코딩하므로, 여기서 한 번 디코딩해 이중 인코딩(%252B)을 방지한다.
+    # 이미 디코딩된 키(+,/ 포함)는 unquote 가 그대로 두므로 양쪽 모두 안전.
+    return unquote(key)
 
 
 def _severity_from_counts(dth: int, se: int, sl: int) -> str:

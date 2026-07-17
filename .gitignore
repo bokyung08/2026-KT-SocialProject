@@ -241,3 +241,7 @@ trainer_output/
 # AI Agent
 .claude
 .omc
+
+# osmnx / pmdata runtime
+/cache/
+/data/

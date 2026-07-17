@@ -245,3 +245,7 @@ trainer_output/
 # osmnx / pmdata runtime
 /cache/
 /data/
+
+# openAPI(swagger) codegen build artifacts
+/docs/.swagger-codegen/
+/docs/.swagger-codegen-ignore

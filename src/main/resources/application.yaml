@@ -3,5 +3,15 @@ ktor:
     port: 8080
   application:
     modules:
+      - kt.dinjae.traffic.plugins.SerializationKt.configureSerialization
+      - kt.dinjae.traffic.plugins.StatusPagesKt.configureStatusPages
       - kt.dinjae.traffic.HttpKt.configureHttp
       - kt.dinjae.traffic.RoutingKt.configureRouting
+
+# 경로 탐색 엔진 설정 (PROJECT.md §3). osmFile 미설정 시 엔진 비활성(/route 는 503).
+routing:
+  osmFile: ${?PM_OSM_FILE}
+  graphCache: ${?PM_GRAPH_CACHE}
+  profile: pm_bike
+  turnCosts: "true"
+  maxAlternatives: "3"

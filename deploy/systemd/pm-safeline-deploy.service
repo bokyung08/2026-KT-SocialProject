@@ -1,13 +1,14 @@
 [Unit]
-Description=PM 세이프라인 자동 배포 (git pull + 빌드 + 재시작)
+Description=PM 세이프라인 자동 배포 (git pull + 유닛 동기화 + 빌드 + 재시작)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=deploy
+# root 로 실행: systemd 유닛 동기화(cp + daemon-reload)와 서비스 재시작을 위해 필요.
+# 앱 자체는 pm-safeline.service 에서 비특권 사용자(User=deploy)로 실행된다.
 WorkingDirectory=/opt/pm-safeline/app
-# 빌드 시 gradle 이 java 를 찾을 수 있도록.
+# 빌드 시 gradle 이 java 를 찾을 수 있도록. 경로는 서버에 맞게 수정.
 Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk
 Environment=PATH=/usr/lib/jvm/java-21-openjdk/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/opt/pm-safeline/app/deploy/deploy.sh

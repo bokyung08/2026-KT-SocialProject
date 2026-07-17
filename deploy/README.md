@@ -6,12 +6,20 @@
 
 | 파일 | 역할 |
 |---|---|
-| `systemd/pm-safeline.service` | 앱을 상시 실행하는 서비스 |
-| `deploy.sh` | `origin/main` 확인 → 변경 시 reset·빌드·재시작 |
-| `systemd/pm-safeline-deploy.service` | `deploy.sh` 를 실행하는 oneshot |
+| `bootstrap.sh` | **최초 1회** 유닛 등록 + 빌드 + 활성화 (멱등) |
+| `teardown.sh` | 배포 서버에서 제거 (`--purge` 로 완전 삭제) |
+| `systemd/pm-safeline.service` | 앱을 상시 실행하는 서비스 (기본 root, 단순) |
+| `deploy.sh` | `origin/main` 확인 → 변경 시 reset·유닛동기화·빌드·재시작 (root) |
+| `systemd/pm-safeline-deploy.service` | `deploy.sh` 를 실행하는 oneshot (root) |
 | `systemd/pm-safeline-deploy.timer` | 2분마다 위 oneshot 실행(폴링) |
 
 동작: **timer**(2분) → **deploy.service** → `deploy.sh`(새 커밋 있을 때만 빌드·`systemctl restart`) → **pm-safeline.service** 재시작.
+
+### ❓ 처음 시작 때 systemd 등록도 자동인가?
+
+**아니요 — 최초 등록은 1회 수동 트리거가 필요합니다.** systemd 는 아직 등록되지 않은 유닛을 스스로 실행할 수 없으므로(닭-달걀 문제), 어떤 자동배포 방식이든 "맨 처음 한 번"은 사람이 실행해야 합니다. 그래서 그 1회를 **명령 한 줄**(`bootstrap.sh`)로 만들었습니다.
+
+**한 번 부트스트랩한 뒤에는 완전 자동입니다**: 코드 변경은 물론, `deploy/systemd/*` 유닛 파일이 바뀌어도 `deploy.sh` 가 매 배포 때 `/etc/systemd/system` 으로 동기화하고 `daemon-reload` 하므로 재부트스트랩이 필요 없습니다. 서버 재부팅 시에도 `enable` 되어 있어 자동 시작됩니다.
 
 ## 최초 설정 (배포 서버에서 1회)
 
@@ -19,37 +27,26 @@
 # 0) JDK 21 · git 설치 (예: Ubuntu)
 sudo apt-get update && sudo apt-get install -y git openjdk-21-jdk
 
-# 1) 배포 전용 사용자 + 디렉토리
-sudo useradd --system --create-home --home-dir /opt/pm-safeline deploy
-sudo -u deploy git clone -b main <REPO_URL> /opt/pm-safeline/app
+# 1) 디렉토리 + 클론
+sudo git clone -b main <REPO_URL> /opt/pm-safeline/app
 cd /opt/pm-safeline/app
 
 # 2) 비밀/설정: .env 작성 (git 에 없음). 최소 PM_OSM_FILE 지정.
-sudo -u deploy cp .env.default .env
-sudo -u deploy nano .env      # KOROAD_API_KEY, PM_OSM_FILE 등 채우기
+sudo cp .env.default .env
+sudo nano .env                # KOROAD_API_KEY, PM_OSM_FILE 등 채우기
 #   예) PM_OSM_FILE=/opt/pm-safeline/app/data/osm/daejeon.osm
 #   OSM 파일은 미리 서버에 올려두거나 Overpass 로 받아 data/osm/ 에 둔다.
 
-# 3) 최초 빌드
-sudo -u deploy env JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon clean installDist
-
-# 4) deploy 사용자가 앱 서비스만 재시작할 수 있게 sudoers 허용(비번 없이)
-echo 'deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart pm-safeline.service' \
-  | sudo tee /etc/sudoers.d/pm-safeline-deploy
-sudo chmod 440 /etc/sudoers.d/pm-safeline-deploy
-
-# 5) systemd 유닛 설치
-sudo cp deploy/systemd/pm-safeline.service          /etc/systemd/system/
-sudo cp deploy/systemd/pm-safeline-deploy.service   /etc/systemd/system/
-sudo cp deploy/systemd/pm-safeline-deploy.timer     /etc/systemd/system/
-sudo systemctl daemon-reload
-
-# 6) 앱 + 자동배포 타이머 활성화
-sudo systemctl enable --now pm-safeline.service
-sudo systemctl enable --now pm-safeline-deploy.timer
+# 3) 부트스트랩 한 줄 — 유닛 등록 + 빌드 + 활성화 (이후 자동)
+sudo bash deploy/bootstrap.sh
 ```
 
-> ⚠️ 유닛 파일의 `JAVA_HOME`, 경로(`/opt/pm-safeline/app`), 사용자(`deploy`)를 서버 환경에 맞게 확인/수정하세요.
+기본은 **root 로 단순하게** 실행합니다(전용 사용자·sudoers 불필요). 비특권 사용자로
+하드닝하려면 `pm-safeline.service` 의 `User=` 주석을 해제하고 그 사용자에게
+디렉토리 읽기 + `data/` 쓰기 권한을 주면 됩니다.
+
+> ⚠️ 유닛 파일과 스크립트의 `JAVA_HOME`, 경로(`/opt/pm-safeline/app`)를 서버 환경에 맞게
+> 확인/수정하세요. 경로가 다르면 `PM_APP_DIR` 환경변수로 넘길 수 있습니다.
 > `installDist` 실행 스크립트 이름은 `rootProject.name`(=`safety`)을 따르므로 `build/install/safety/bin/safety` 입니다.
 
 ## 확인 / 운영
@@ -77,6 +74,27 @@ curl -s localhost:8080/health
 - 재시작 시 GraphHopper 그래프 캐시(`PM_GRAPH_CACHE`)가 있으면 재임포트 없이 빠르게 뜹니다. OSM 파일이 바뀐 경우에만 캐시를 지우세요.
 - 폴링 주기는 `pm-safeline-deploy.timer` 의 `OnUnitActiveSec` 로 조절합니다(기본 2분).
 - 무중단이 필요하면 이후 blue-green(포트 2개 + 리버스 프록시 스위칭)으로 확장할 수 있습니다. 현재는 재시작 시 수 초 다운타임이 있습니다.
+
+## 제거 (uninstall)
+
+```bash
+cd /opt/pm-safeline/app
+
+# 서비스·타이머·유닛만 제거 (앱 디렉토리·.env·data 는 보존)
+sudo bash deploy/teardown.sh
+
+# 앱 디렉토리(/opt/pm-safeline)까지 통째로 완전 삭제
+sudo bash deploy/teardown.sh --purge
+```
+
+스크립트 없이 수동으로 하려면:
+
+```bash
+sudo systemctl disable --now pm-safeline-deploy.timer pm-safeline.service
+sudo rm -f /etc/systemd/system/pm-safeline*.service /etc/systemd/system/pm-safeline*.timer
+sudo systemctl daemon-reload
+sudo rm -rf /opt/pm-safeline    # (선택) 앱 디렉토리까지 완전 삭제
+```
 
 ## 대안 (참고)
 

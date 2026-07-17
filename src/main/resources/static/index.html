@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>PM 세이프라인</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
@@ -811,6 +812,21 @@
     });
     highlightRoute(0);
   }
+
+  // 데모 딥링크: ?demo=1 이면 샘플 경로(충남대 → 대전시청)를 자동 지정·탐색.
+  (function () {
+    var p = new URLSearchParams(location.search);
+    if (!p.get("demo")) return;
+    fromLatLng = L.latLng(36.3664, 127.3447);
+    toLatLng = L.latLng(36.3504, 127.3845);
+    if (fromMarker) map.removeLayer(fromMarker);
+    if (toMarker) map.removeLayer(toMarker);
+    fromMarker = L.marker(fromLatLng, { icon: greenIcon }).addTo(map);
+    toMarker = L.marker(toLatLng, { icon: redIcon }).addTo(map);
+    updateCoordPanel();
+    openPlanBtn.click();
+    setTimeout(function () { searchBtn.click(); }, 500);
+  })();
 })();
 </script>
 </body>

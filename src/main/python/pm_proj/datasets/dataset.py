@@ -18,7 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, TYPE_CHECKING
 
-from .config import Config, DEFAULT_CONFIG
+from ..utils.config import Config, DEFAULT_CONFIG
 
 if TYPE_CHECKING:  # 타입 힌트용(런타임 임포트 아님)
     import torch

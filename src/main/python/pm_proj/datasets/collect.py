@@ -10,13 +10,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from .config import Config, DEFAULT_CONFIG
-from .streetview import StreetViewProvider, get_provider
+from ..utils.config import Config, DEFAULT_CONFIG
+from ..utils.streetview import StreetViewProvider, get_provider
 
 if TYPE_CHECKING:
     import geopandas as gpd
@@ -104,7 +103,7 @@ def run_pipeline(cfg: Config = DEFAULT_CONFIG, *, pm_only: bool = True, limit: i
     TAAS 로드 -> OSM edge -> 지점 샘플링 -> negative 매칭 -> 라벨결합 -> 이미지 수집.
     각 단계 산출물은 data/ 에 캐시된다.
     """
-    from . import geo, negatives, taas
+    from ..utils import geo, negatives, taas
 
     print("[pipeline] 1/5 TAAS 사고 로드")
     accidents = taas.load_taas_files(cfg, pm_only=pm_only)

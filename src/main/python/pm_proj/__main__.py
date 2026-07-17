@@ -15,9 +15,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
-
-from .config import Config, DEFAULT_CONFIG
+from .utils.config import Config
 
 
 def _cfg_from_args(args) -> Config:
@@ -28,7 +26,7 @@ def _cfg_from_args(args) -> Config:
 
 
 def cmd_collect(args) -> None:
-    from . import collect
+    from .datasets import collect
 
     cfg = _cfg_from_args(args)
     collect.run_pipeline(cfg, pm_only=not args.all_modes, limit=args.limit)
@@ -52,12 +50,13 @@ def cmd_stats(args) -> None:
 def cmd_check(args) -> None:
     """수집 없이 import/설정 sanity check (torch 불필요)."""
     cfg = _cfg_from_args(args)
-    from . import geo, negatives, streetview, taas, collect  # noqa: F401
+    from .utils import geo, negatives, streetview, taas  # noqa: F401
+    from .datasets import collect  # noqa: F401
 
     print("[check] 수집 모듈 import OK (torch 불필요)")
     print(f"[check] bbox={cfg.bbox}  data_dir={cfg.data_dir}  provider={cfg.streetview.provider}")
     try:
-        from . import dataset  # noqa: F401
+        from .datasets import dataset  # noqa: F401
         import importlib.util
 
         has_torch = importlib.util.find_spec("torch") is not None
@@ -67,7 +66,7 @@ def cmd_check(args) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="pmdata", description="PM 로드뷰 위험도 데이터셋 구축")
+    p = argparse.ArgumentParser(prog="pm_proj", description="PM 로드뷰 위험도 데이터셋 구축")
     p.add_argument("--data-dir", help="데이터 루트(기본 env PM_DATA_DIR 또는 ./data)")
     sub = p.add_subparsers(dest="cmd", required=True)
 

@@ -17,9 +17,10 @@ pm_safeline/
 │   ├── geo.py          OSM 도로망 → 고정간격 지점 + 방위각, 사고점 스냅
 │   ├── negatives.py    exposure-matched negative 샘플링(§4.5-2)
 │   └── streetview.py   스트리트뷰 provider(mock/google/naver-stub)
-├── datasets/    # 오케스트레이션 + Dataset
-│   ├── collect.py      수집 파이프라인 → ImageFolder 레이아웃 + manifest
-│   └── roadview.py     torchvision 포맷 PMRoadviewDataset + 분할(torch 지연 임포트)
+├── datasets/    # 데이터셋 추상화 + 오케스트레이션
+│   ├── accidents.py    AccidentDataset — 사고 지점(KoROAD/TAAS 통합, 스키마 검증)
+│   ├── roadview.py     PMRoadviewDataset — 로드뷰 이미지(torchvision, +분할)
+│   └── collect.py      수집 파이프라인 → ImageFolder 레이아웃 + manifest
 ├── models/      # teacher 위험도 모델(ZenSVI ViT 파인튜닝, §4.4) — 다음 단계
 └── __main__.py  # CLI (python -m pm_safeline)
 ```

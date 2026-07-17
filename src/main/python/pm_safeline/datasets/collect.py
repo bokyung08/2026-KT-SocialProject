@@ -114,16 +114,13 @@ def run_pipeline(
         "taas"          — data/raw/ 의 수동 다운로드 CSV/XLSX 사용.
     """
     from ..utils import geo, negatives
+    from .accidents import AccidentDataset
 
     print(f"[pipeline] 1/5 사고 로드 (source={source})")
-    if source == "koroad":
-        from ..utils import koroad
-        accidents = koroad.download_to_raw(cfg, kind="motorcycle")
-    elif source == "taas":
-        from ..utils import taas
-        accidents = taas.load_taas_files(cfg, pm_only=pm_only)
-    else:
-        raise ValueError(f"알 수 없는 source: {source} (koroad|taas)")
+    ds = AccidentDataset.load(source, cfg, pm_only=pm_only) if source == "taas" \
+        else AccidentDataset.load(source, cfg)
+    print(f"[pipeline]   {ds} · severity={ds.severity_counts()}")
+    accidents = ds.to_geodataframe()
 
     print("[pipeline] 2/5 OSM 도로망 로드")
     edges = geo.load_drive_edges(cfg)

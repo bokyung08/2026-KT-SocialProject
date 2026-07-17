@@ -564,24 +564,21 @@
     iconAnchor: [8, 16]
   });
 
-  // 현재 위치 표시(파란 점) + 로드 시 그 지점으로 이동. 데모 모드에서는 경로에 맞추므로 생략.
-  var meMarker = null;
-  function showCurrentLocation(lat, lon, recenter) {
-    var latlng = L.latLng(lat, lon);
-    if (meMarker) map.removeLayer(meMarker);
-    meMarker = L.circleMarker(latlng, {
-      radius: 7, color: "#fff", weight: 2, fillColor: "#2B6FE3", fillOpacity: 1
-    }).addTo(map).bindTooltip("현재 위치");
-    if (recenter) map.setView(latlng, DEFAULT_ZOOM);
-  }
+  // 로드 시 현재 위치를 '출발지'로 자동 지정(초록 마커) + 그 지점으로 이동.
+  // 이후 지도를 한 번 클릭하면 '목적지'가 지정된다. 데모 모드에서는 경로에 맞추므로 생략.
   (function initCurrentLocation() {
     var isDemo = new URLSearchParams(location.search).get("demo");
     if (isDemo || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      function (pos) { showCurrentLocation(pos.coords.latitude, pos.coords.longitude, true); },
-      function () { /* 권한 거부/실패 시 기본 대전 중심 유지 */ },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-    );
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      if (fromLatLng) return; // 콜백 도착 전 사용자가 이미 출발지를 찍었으면 존중
+      fromLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      if (fromMarker) map.removeLayer(fromMarker);
+      fromMarker = L.marker(fromLatLng, { icon: greenIcon })
+        .addTo(map).bindTooltip("현재 위치 (출발지)");
+      updateCoordPanel();
+      map.setView(fromLatLng, DEFAULT_ZOOM);
+    }, function () { /* 권한 거부/실패 시 기본 대전 중심 유지 */ },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
   })();
 
   function fmtCoord(ll) {

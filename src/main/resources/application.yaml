@@ -1,0 +1,17 @@
+ktor:
+  deployment:
+    port: 8080
+  application:
+    modules:
+      - kt.dinjae.pm_safeline.plugins.SerializationKt.configureSerialization
+      - kt.dinjae.pm_safeline.plugins.StatusPagesKt.configureStatusPages
+      - kt.dinjae.pm_safeline.HttpKt.configureHttp
+      - kt.dinjae.pm_safeline.RoutingKt.configureRouting
+
+# 경로 탐색 엔진 설정 (PROJECT.md §3). osmFile 미설정 시 엔진 비활성(/route 는 503).
+routing:
+  osmFile: ${?PM_OSM_FILE}
+  graphCache: ${?PM_GRAPH_CACHE}
+  profile: pm_bike
+  turnCosts: "true"
+  maxAlternatives: "3"

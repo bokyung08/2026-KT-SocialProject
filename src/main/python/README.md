@@ -19,6 +19,7 @@ pm_safeline/
 │       ├── negatives.py    exposure-matched negative 샘플링(§4.5-2)
 │       └── streetview.py   스트리트뷰 provider(mock/google/naver/kakao)
 ├── models/      # teacher 위험도 모델(ZenSVI ViT 파인튜닝, §4.4) — 다음 단계
+├── utils/       # 데이터셋/모델에 안 묶이는 공통 코드(training·eval 등, 추후)
 └── __main__.py  # CLI (python -m pm_safeline)
 ```
 

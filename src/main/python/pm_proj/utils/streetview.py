@@ -7,7 +7,7 @@ provider 인터페이스로 둔다. 각 provider 구현 시 해당 서비스 약
 기본 제공:
     - MockProvider   : 네트워크 없이 파이프라인 검증용(지점별 결정적 색상 이미지).
     - GoogleProvider : Street View Static API(문서화된 공식 REST, 키·과금 필요).
-    - NaverProvider  : 스텁 — 공식 정적 파노라마 REST 부재. 승인된 방식 확정 후 구현.
+    - NaverProvider  : 네이버 지도 로드뷰 공개 파노라마 엔드포인트(키 불필요, 내부 REST).
 
 공통 계약:
     fetch(lat, lon, heading, cfg) -> bytes(JPEG/PNG)  또는  None(해당 지점 커버리지 없음)
@@ -112,22 +112,162 @@ class GoogleProvider(StreetViewProvider):
 
 
 class NaverProvider(StreetViewProvider):
-    """네이버 로드뷰 — 스텁.
+    """네이버 지도 로드뷰(파노라마) still-image provider.
 
-    네이버 지도 파노라마는 공식 '정적 이미지 REST'가 없고 JS SDK 중심이라,
-    약관상 허용되는 수집 방식(승인 API/제휴)이 확정되기 전에는 구현하지 않는다.
-    §4.5-(5) 약관 확인 완료 후 이 클래스의 fetch 를 채운다.
+    네이버 지도 웹 클라이언트가 사용하는 공개 파노라마 엔드포인트를 이용한다
+    (API 키 불필요, ``Referer: https://map.naver.com`` 헤더 필요).
+
+    파이프라인:
+      1) 좌표 -> 최근접 파노라마 조회
+         GET https://map.naver.com/p/api/panorama/nearby/{lon}/{lat}
+         -> GeoJSON. features[0].properties.id(파노ID), heading(차량 진행방위) 반환.
+            features 가 비면 해당 지점 커버리지 없음 -> None.
+      2) 파노라마 등거원통(equirectangular) 타일 조합
+         GET https://panorama.pstatic.net/imageV3/{panoid}/{zoom}/{x}/{y}
+         zoom 0 => 4x2 격자(512px 타일) = 2048x1024 전방위 이미지.
+      3) 요청 heading 을 중심으로 fov 폭 창을 크롭 후 cfg 크기로 리사이즈.
+
+    heading 매핑: equirect 가로 중앙(W/2)이 파노라마 진행방위(metadata heading)에
+    대응한다고 가정한다(네이버 웹뷰어 관측치). 절대 방위가 필요 없다면 이 근사로 충분.
+
+    엔드포인트 출처(reverse-engineered, 커뮤니티 검증):
+      - streetlevel(sk-zk) naver 모듈: nearby / imageV3 타일 URL.
+    ToS: 공식 문서화된 REST 가 아니라 웹 클라이언트 내부 엔드포인트다. 대량수집 시
+    §4.5-(5) 약관 확인 필요. requests_per_sec 레이트리밋으로 부하를 제한한다.
     """
 
     name = "naver"
+    _NEARBY_URL = "https://map.naver.com/p/api/panorama/nearby/{lon}/{lat}"
+    _TILE_URL = "https://panorama.pstatic.net/imageV3/{panoid}/{zoom}/{x}/{y}"
+    # 큐브맵 6면 스트립(f,r,b,l,u,d 가로 배열, 각 256px). imageV3 미제공 파노 폴백용.
+    _STRIP_URL = "https://panorama.pstatic.net/image/{panoid}/512/P"
+    _FACE_PX = 256
+    _HEADERS = {
+        "Referer": "https://map.naver.com",
+        "User-Agent": "Mozilla/5.0 (compatible; pm-proj/1.0)",
+    }
+    _TILE = 512  # 타일 한 변(px)
 
     def available(self) -> bool:
-        return False
+        # 공개 엔드포인트(키 불필요). 네트워크만 있으면 사용 가능.
+        return True
+
+    def _nearest(self, requests, lat: float, lon: float):
+        """(panoid, pano_heading) 또는 None."""
+        url = self._NEARBY_URL.format(lon=lon, lat=lat)
+        self._throttle()
+        r = requests.get(url, headers=self._HEADERS, timeout=10)
+        if r.status_code != 200:
+            return None
+        feats = (r.json() or {}).get("features") or []
+        if not feats:
+            return None
+        props = feats[0].get("properties") or {}
+        pid = props.get("id")
+        if not pid:
+            return None
+        try:
+            pano_heading = float(props.get("heading", 0.0))
+        except (TypeError, ValueError):
+            pano_heading = 0.0
+        return pid, pano_heading
+
+    def _equirect(self, requests, panoid: str, zoom: int = 0):
+        """등거원통 전방위 이미지를 조합해 PIL.Image 로 반환. 실패 시 None."""
+        from PIL import Image
+
+        cols, rows = 4 * (2 ** zoom), 2 * (2 ** zoom)
+        canvas = Image.new("RGB", (cols * self._TILE, rows * self._TILE))
+        for cx in range(cols):
+            for cy in range(rows):
+                url = self._TILE_URL.format(
+                    panoid=panoid, zoom=zoom, x=cx + 1, y=cy + 1
+                )
+                self._throttle()
+                r = requests.get(url, headers=self._HEADERS, timeout=15)
+                # imageV3 미제공 파노(구형 큐브맵 전용)는 첫 타일부터 404 -> 폴백 유도.
+                if r.status_code != 200 or not r.content:
+                    return None
+                try:
+                    tile = Image.open(io.BytesIO(r.content)).convert("RGB")
+                except Exception:
+                    return None
+                canvas.paste(tile, (cx * self._TILE, cy * self._TILE))
+        return canvas
+
+    def _cubemap_face(self, requests, panoid: str, rel_heading: float):
+        """imageV3 미제공 파노 폴백: 큐브맵 6면 스트립에서 요청 방위에 가장 가까운
+        수평 면(f/r/b/l, 각 90°)을 골라 PIL.Image 로 반환. 실패 시 None.
+
+        스트립은 f(정면=진행방위),r(+90),b(+180),l(+270),u,d 순 가로 배열.
+        """
+        from PIL import Image
+
+        self._throttle()
+        r = requests.get(
+            self._STRIP_URL.format(panoid=panoid), headers=self._HEADERS, timeout=15
+        )
+        if r.status_code != 200 or not r.content:
+            return None
+        try:
+            strip = Image.open(io.BytesIO(r.content)).convert("RGB")
+        except Exception:
+            return None
+        # 진행방위 기준 상대 방위 -> 가장 가까운 수평 면 인덱스(0:f,1:r,2:b,3:l).
+        idx = int(((rel_heading + 45.0) % 360.0) // 90.0)
+        fw = self._FACE_PX
+        return strip.crop((idx * fw, 0, (idx + 1) * fw, strip.size[1]))
 
     def fetch(self, lat: float, lon: float, heading: float) -> bytes | None:
-        raise NotImplementedError(
-            "NaverProvider 미구현: 로드뷰 대량수집 약관(§4.5-5) 확인 후 승인된 방식으로 구현하세요."
-        )
+        import requests
+        from PIL import Image
+
+        found = self._nearest(requests, lat, lon)
+        if found is None:
+            return None  # 커버리지 없음
+        panoid, pano_heading = found
+
+        rel = ((float(heading) - pano_heading) % 360.0)  # 진행방위 기준 상대 방위
+
+        # 크롭 해상도가 출력보다 충분하도록 zoom 선택(zoom0=2048px 폭).
+        zoom = 1 if self.sv.width > 1024 else 0
+        equi = self._equirect(requests, panoid, zoom=zoom)
+        if equi is None:
+            # imageV3 미제공 파노 -> 큐브맵 면 폴백(유효 이미지 확보 우선).
+            face = self._cubemap_face(requests, panoid, rel)
+            if face is None:
+                return None
+            face = face.resize((self.sv.width, self.sv.height), Image.LANCZOS)
+            buf = io.BytesIO()
+            face.save(buf, format="JPEG", quality=88)
+            return buf.getvalue()
+        W, H = equi.size
+
+        # heading 중심 fov 폭 창을 가로 방향 wrap-around 로 크롭.
+        fov = float(self.sv.fov)
+        center_x = (W / 2.0) + (rel / 360.0) * W
+        crop_w = max(1, int(round(fov / 360.0 * W)))
+        # 세로: 지평선(H/2) 중심, 출력 종횡비에 맞춘 각도 폭.
+        aspect = self.sv.height / max(1, self.sv.width)
+        crop_h = max(1, int(round(crop_w * aspect)))
+        top = int(round(H / 2.0 - crop_h / 2.0))
+        top = max(0, min(H - crop_h, top))
+
+        # wrap 처리: 좌우로 이어붙인 뒤 잘라낸다.
+        left = int(round(center_x - crop_w / 2.0)) % W
+        if left + crop_w <= W:
+            win = equi.crop((left, top, left + crop_w, top + crop_h))
+        else:
+            first = equi.crop((left, top, W, top + crop_h))
+            second = equi.crop((0, top, (left + crop_w) - W, top + crop_h))
+            win = Image.new("RGB", (crop_w, crop_h))
+            win.paste(first, (0, 0))
+            win.paste(second, (first.size[0], 0))
+
+        win = win.resize((self.sv.width, self.sv.height), Image.LANCZOS)
+        buf = io.BytesIO()
+        win.save(buf, format="JPEG", quality=88)
+        return buf.getvalue()
 
 
 _REGISTRY: dict[str, type[StreetViewProvider]] = {

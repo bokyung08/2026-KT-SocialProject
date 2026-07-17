@@ -18,6 +18,18 @@ DAEJEON_BBOX: tuple[float, float, float, float] = (127.30, 36.31, 127.43, 36.39)
 METRIC_CRS = "EPSG:32652"
 WGS84 = "EPSG:4326"
 
+# 프로젝트 루트 = .../src/main/python/pm_proj/utils/config.py 기준 5단계 상위
+_PROJECT_ROOT = Path(__file__).resolve().parents[5]
+
+
+def _default_data_dir() -> Path:
+    """데이터 다운로드 루트. 환경변수 PM_DATA_DIR 우선, 없으면 프로젝트 루트의 data/.
+
+    CWD 와 무관하게 항상 프로젝트 루트의 data/ 로 저장된다(gitignore 대상).
+    """
+    env = os.environ.get("PM_DATA_DIR")
+    return Path(env) if env else _PROJECT_ROOT / "data"
+
 # TAAS 심각도 라벨 정규화 매핑
 SEVERITY_ORDER = ["경상", "중상", "사망"]
 
@@ -53,7 +65,7 @@ class Config:
     metric_crs: str = METRIC_CRS
 
     # 데이터 루트. 기본은 저장소 상대 경로.
-    data_dir: Path = field(default_factory=lambda: Path(os.environ.get("PM_DATA_DIR", "data")))
+    data_dir: Path = field(default_factory=lambda: _default_data_dir())
 
     # 도로 위 지점 샘플링 간격(m) — §4.5 부가설계: 30~50m 고정간격 권장
     sample_interval_m: float = 40.0

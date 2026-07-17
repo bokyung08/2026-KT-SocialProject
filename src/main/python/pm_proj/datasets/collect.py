@@ -97,16 +97,33 @@ def collect_images(
     return manifest
 
 
-def run_pipeline(cfg: Config = DEFAULT_CONFIG, *, pm_only: bool = True, limit: int | None = None) -> pd.DataFrame:
+def run_pipeline(
+    cfg: Config = DEFAULT_CONFIG,
+    *,
+    source: str = "koroad",
+    pm_only: bool = True,
+    limit: int | None = None,
+) -> pd.DataFrame:
     """전체 수집 파이프라인 원샷 실행.
 
-    TAAS 로드 -> OSM edge -> 지점 샘플링 -> negative 매칭 -> 라벨결합 -> 이미지 수집.
+    사고 로드 -> OSM edge -> 지점 샘플링 -> negative 매칭 -> 라벨결합 -> 이미지 수집.
     각 단계 산출물은 data/ 에 캐시된다.
-    """
-    from ..utils import geo, negatives, taas
 
-    print("[pipeline] 1/5 TAAS 사고 로드")
-    accidents = taas.load_taas_files(cfg, pm_only=pm_only)
+    source:
+        "koroad" (기본) — KoROAD 이륜차 교통사고 다발지역 오픈API 자동 다운로드.
+        "taas"          — data/raw/ 의 수동 다운로드 CSV/XLSX 사용.
+    """
+    from ..utils import geo, negatives
+
+    print(f"[pipeline] 1/5 사고 로드 (source={source})")
+    if source == "koroad":
+        from ..utils import koroad
+        accidents = koroad.download_to_raw(cfg, kind="motorcycle")
+    elif source == "taas":
+        from ..utils import taas
+        accidents = taas.load_taas_files(cfg, pm_only=pm_only)
+    else:
+        raise ValueError(f"알 수 없는 source: {source} (koroad|taas)")
 
     print("[pipeline] 2/5 OSM 도로망 로드")
     edges = geo.load_drive_edges(cfg)

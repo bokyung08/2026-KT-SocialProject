@@ -29,7 +29,16 @@ def cmd_collect(args) -> None:
     from .datasets import collect
 
     cfg = _cfg_from_args(args)
-    collect.run_pipeline(cfg, pm_only=not args.all_modes, limit=args.limit)
+    collect.run_pipeline(cfg, source=args.source, pm_only=not args.all_modes, limit=args.limit)
+
+
+def cmd_download(args) -> None:
+    """KoROAD 다발지역 오픈API 만 받아 data/raw/ 에 캐시(수집/이미지 없이)."""
+    from .utils import koroad
+
+    cfg = _cfg_from_args(args)
+    gdf = koroad.download_to_raw(cfg, kind=args.kind)
+    print(f"[download] {len(gdf)}개 다발지역 -> {cfg.raw_dir}")
 
 
 def cmd_stats(args) -> None:
@@ -71,9 +80,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("collect", help="전체 수집 파이프라인 실행")
+    c.add_argument("--source", choices=["koroad", "taas"], default="koroad",
+                   help="사고 소스: koroad(오픈API 자동, 기본) | taas(수동 CSV)")
     c.add_argument("--limit", type=int, default=None, help="처리 지점 수 상한(테스트용)")
-    c.add_argument("--all-modes", action="store_true", help="PM/자전거 외 전체 사고 포함")
+    c.add_argument("--all-modes", action="store_true", help="PM/자전거 외 전체 사고 포함(taas 소스)")
     c.set_defaults(func=cmd_collect)
+
+    d = sub.add_parser("download", help="KoROAD 다발지역 오픈API 만 받아 캐시")
+    d.add_argument("--kind", default="motorcycle", help="다발지역 종류(motorcycle|bicycle 등)")
+    d.set_defaults(func=cmd_download)
 
     s = sub.add_parser("stats", help="manifest 통계 출력")
     s.set_defaults(func=cmd_stats)

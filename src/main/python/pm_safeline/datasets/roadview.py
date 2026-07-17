@@ -58,14 +58,38 @@ CLASS_NAMES = {1: "accident", 0: "control"}
 
 
 def _headings_for(row, cfg: Config) -> list[float]:
-    base = row.get("heading")
+    """한 지점에서 촬영할 방위각 목록. 기본은 **4방향**(도로 진행방향 기준 전/우/후/좌).
+
+    ZenSVI 처럼 한 지점의 파노라마를 방향별 perspective 이미지로 분해해 도로 구조를
+    사방으로 포착한다(자전거도로 단절·차도 합류·측면 위험 등은 한 방향으로 안 보임).
+    cfg.streetview.headings 로 방향 집합을 재정의할 수 있다.
+    """
     configured = cfg.streetview.headings
     if configured:
         return [float(h) for h in configured]
-    if base is None or pd.isna(base):
-        # 방위각 미상 지점: 4방위로 촬영
-        return [0.0, 90.0, 180.0, 270.0]
-    return [float(base)]
+    base = row.get("heading")
+    base = 0.0 if (base is None or pd.isna(base)) else float(base)
+    return [(base + d) % 360.0 for d in (0.0, 90.0, 180.0, 270.0)]
+
+
+def _is_real_image(data: bytes, min_bytes: int = 8000, min_detail: float = 3.0) -> bool:
+    """실제 로드뷰 사진인지 판별(단색 mock·회색 placeholder·커버리지 부족 거부).
+
+    실사진은 인접 픽셀 변화(디테일)가 크다. 단색은 JPEG 아티팩트로 표준편차는 있어도
+    인접 픽셀 차이는 0 에 가깝다 → 디테일로 구분. 크기 하한도 함께 사용.
+    """
+    if not data or len(data) < min_bytes:
+        return False
+    try:
+        import io
+        import numpy as np
+        from PIL import Image
+
+        arr = np.asarray(Image.open(io.BytesIO(data)).convert("RGB").resize((64, 64)), dtype="int16")
+        detail = float(np.abs(np.diff(arr, axis=0)).mean() + np.abs(np.diff(arr, axis=1)).mean()) / 2.0
+        return detail >= min_detail
+    except Exception:
+        return False
 
 
 def collect_images(
@@ -84,6 +108,8 @@ def collect_images(
         (cfg.images_dir / cls).mkdir(parents=True, exist_ok=True)
 
     provider = provider or get_provider(cfg)
+    # mock 은 테스트용(단색) 이라 유효성 검사 우회. 실제 provider 는 placeholder/단색을 거부.
+    validate = getattr(provider, "name", "") != "mock"
 
     records: list[dict] = []
     rows = labeled_points.iloc[:limit] if limit else labeled_points
@@ -96,7 +122,9 @@ def collect_images(
             fname = f"{pid}_h{int(round(heading)):03d}.jpg"
             out_path = cfg.images_dir / cls / fname
 
-            if not out_path.exists():
+            if out_path.exists():
+                img = out_path.read_bytes()
+            else:
                 try:
                     img = provider.fetch(float(row["lat"]), float(row["lon"]), heading)
                 except Exception as e:  # noqa: BLE001
@@ -104,6 +132,14 @@ def collect_images(
                     continue
                 if img is None:
                     continue  # 커버리지 없음
+
+            # 실사진 검증: 단색(mock)·회색 placeholder·커버리지 부족 이미지는 데이터셋에서 제외
+            if validate and not _is_real_image(img):
+                print(f"[collect] {pid} h{int(round(heading)):03d} 실사진 아님 → 제외")
+                if out_path.exists():
+                    out_path.unlink()
+                continue
+            if not out_path.exists():
                 out_path.write_bytes(img)
 
             records.append(

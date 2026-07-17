@@ -1,0 +1,26 @@
+[Unit]
+Description=PM 세이프라인 안전경로 서버 (Ktor/GraphHopper)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pm-safeline/app
+
+# JDK 21 필요. 배포판 실행 스크립트가 java 를 PATH 에서 찾는다. 경로는 서버에 맞게 수정.
+Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+Environment=PATH=/usr/lib/jvm/java-21-openjdk/bin:/usr/local/bin:/usr/bin:/bin
+Environment=JAVA_OPTS=-Xmx1g
+
+# 앱은 WorkingDirectory 의 .env 를 자동 로드(Dotenv). PM_OSM_FILE 등은 .env 에 둔다.
+ExecStart=/opt/pm-safeline/app/build/install/safety/bin/safety
+Restart=on-failure
+RestartSec=5
+
+# 기본은 root 로 실행(단순). 비특권 사용자로 하드닝하려면 아래 주석을 해제하고,
+# 그 사용자가 WorkingDirectory 를 읽고 data/ 에 쓸 수 있게 권한을 맞추세요.
+# User=pmapp
+# Group=pmapp
+
+[Install]
+WantedBy=multi-user.target

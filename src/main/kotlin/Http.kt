@@ -7,25 +7,8 @@ import io.ktor.server.plugins.swagger.*
 
 fun Application.configureHttp() {
     routing {
-        openAPI(path = "openapi") {
-            /*
-             Documentation source configuration goes here.
-    
-             This can be from file (documentation.yaml), or it can be served dynamically from your sources using the
-             `describe {}` API on routes.  When `openApi` enabled in Gradle, these calls will be automatically injected
-             based on your code and comments.
-             */
-        }
-    }
-    routing {
-        swaggerUI(path = "openapi") {
-            /*
-             Documentation source configuration goes here.
-    
-             This can be from file (documentation.yaml), or it can be served dynamically from your sources using the
-             `describe {}` API on routes.  When `openApi` enabled in Gradle, these calls will be automatically injected
-             based on your code and comments.
-             */
-        }
+        // 정적 API 문서(ReDoc, /openapi) + 인터랙티브 Swagger UI(/swagger). 둘 다 documentation.yaml 사용.
+        openAPI(path = "openapi", swaggerFile = "documentation.yaml")
+        swaggerUI(path = "swagger", swaggerFile = "documentation.yaml")
     }
 }

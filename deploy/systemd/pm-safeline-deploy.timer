@@ -1,0 +1,12 @@
+[Unit]
+Description=main 브랜치를 2분마다 확인해 변경 시 자동 배포
+
+[Timer]
+# 부팅 1분 후 첫 실행, 이후 마지막 실행 완료 2분 뒤마다 반복.
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=pm-safeline-deploy.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -19,7 +19,7 @@ pm_safeline/
 │   └── streetview.py   스트리트뷰 provider(mock/google/naver-stub)
 ├── datasets/    # 오케스트레이션 + Dataset
 │   ├── collect.py      수집 파이프라인 → ImageFolder 레이아웃 + manifest
-│   └── dataset.py      torchvision 포맷 PMRoadviewDataset (torch 지연 임포트)
+│   └── roadview.py     torchvision 포맷 PMRoadviewDataset + 분할(torch 지연 임포트)
 ├── models/      # teacher 위험도 모델(ZenSVI ViT 파인튜닝, §4.4) — 다음 단계
 └── __main__.py  # CLI (python -m pm_safeline)
 ```
@@ -30,7 +30,7 @@ pm_safeline/
 | 2. OSM 도로망/지점 샘플링·스냅 | `pm_safeline.utils.geo` | ❌ |
 | 3. exposure-matched negative | `pm_safeline.utils.negatives` | ❌ |
 | 4. 스트리트뷰 이미지 수집 | `pm_safeline.utils.streetview`, `pm_safeline.datasets.collect` | ❌ |
-| 5. PyTorch Dataset | `pm_safeline.datasets.dataset` | ✅ (학습 시에만) |
+| 5. PyTorch Dataset | `pm_safeline.datasets.roadview` | ✅ (학습 시에만) |
 
 ## 사용법
 
@@ -71,13 +71,13 @@ python -m pm_safeline stats
 `src/main/python` 이 sys.path 에 있을 때(학습 스크립트를 이 디렉토리에서 실행):
 
 ```python
-from pm_safeline.datasets.dataset import PMRoadviewDataset, default_transform
+from pm_safeline.datasets.roadview import PMRoadviewDataset, default_transform
 
 ds = PMRoadviewDataset(transform=default_transform(train=True))   # (image, label)
 ds_meta = PMRoadviewDataset(return_meta=True)                     # (image, label, meta)
 ds_sev = PMRoadviewDataset(target_key="severity")                # 심각도 회귀/다중클래스
 
-from pm_safeline.datasets.dataset import image_folder
+from pm_safeline.datasets.roadview import image_folder
 folder_ds = image_folder()                                        # 순수 ImageFolder
 ```
 
@@ -87,7 +87,7 @@ folder_ds = image_folder()                                        # 순수 Image
 ### train/valid 분할 (지점 누수 방지 + 라벨 stratify)
 
 ```python
-from pm_safeline.datasets.dataset import make_train_valid, split_indices, kfold_indices
+from pm_safeline.datasets.roadview import make_train_valid, split_indices, kfold_indices
 
 # 학습용 (train=증강, valid=결정적 transform 자동 적용)
 train_ds, valid_ds = make_train_valid(valid_frac=0.2, seed=42)

@@ -65,13 +65,13 @@ def cmd_check(args) -> None:
     print("[check] 수집 모듈 import OK (torch 불필요)")
     print(f"[check] bbox={cfg.bbox}  data_dir={cfg.data_dir}  provider={cfg.streetview.provider}")
     try:
-        from .datasets import dataset  # noqa: F401
+        from .datasets import roadview  # noqa: F401
         import importlib.util
 
         has_torch = importlib.util.find_spec("torch") is not None
-        print(f"[check] dataset 모듈 import OK / torch 설치됨={has_torch}")
+        print(f"[check] roadview 모듈 import OK / torch 설치됨={has_torch}")
     except Exception as e:  # noqa: BLE001
-        print(f"[check] dataset 모듈 경고: {e}")
+        print(f"[check] roadview 모듈 경고: {e}")
 
 
 def build_parser() -> argparse.ArgumentParser:

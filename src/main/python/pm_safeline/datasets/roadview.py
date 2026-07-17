@@ -190,28 +190,35 @@ def build_roadview_dataset(
     accidents = load_accidents(source, cfg, pm_only=pm_only)
     print(f"[pipeline]   {len(accidents)}건 · severity={accidents['severity'].value_counts().to_dict()}")
 
-    # OSM·negative 영역은 하드코딩 bbox 가 아니라 '사고 좌표들의 실제 범위(+여유)'로 잡는다.
+    # OSM·negative 는 **지역별로** 처리한다. 여러 도시를 하나의 bbox 로 묶으면 도시 사이
+    # 빈 공간까지 포함한 거대 OSM 다운로드가 되므로, 지역마다 그 지역 사고 범위에서만 뽑는다.
     import dataclasses
-    minx, miny, maxx, maxy = accidents.total_bounds        # (W, S, E, N)
-    margin = 0.01  # 약 1km — negative 를 사고 주변에서 뽑을 여지
-    region = (minx - margin, miny - margin, maxx + margin, maxy + margin)
-    cfg = dataclasses.replace(cfg, bbox=region)
-    print(f"[pipeline]   작업 영역=사고 범위+여유 {tuple(round(v, 3) for v in region)}")
+    import geopandas as gpd
 
-    print("[pipeline] 2/5 OSM 도로망 로드")
-    edges = geo.load_drive_edges(cfg)
+    print("[pipeline] 2~4/5 지역별 OSM·지점·negative")
+    groups = (list(accidents.groupby("region")) if "region" in accidents.columns
+              else [("all", accidents)])
+    parts = []
+    for rname, acc_r in groups:
+        if len(acc_r) == 0:
+            continue
+        minx, miny, maxx, maxy = acc_r.total_bounds
+        m = 0.01  # 약 1km 여유
+        cfg_r = dataclasses.replace(cfg, bbox=(minx - m, miny - m, maxx + m, maxy + m))
+        print(f"[pipeline]   [{rname}] 사고 {len(acc_r)}건 · 영역 {tuple(round(v,3) for v in cfg_r.bbox)}")
+        edges = geo.load_drive_edges(cfg_r)
+        acc_snapped = geo.snap_accidents_to_edges(acc_r, edges, cfg_r)
+        candidates = geo.sample_points_along_edges(edges, cfg_r)
+        negs = negatives.sample_negatives(acc_snapped, candidates, cfg_r)
+        labeled_r = negatives.build_labeled_points(acc_snapped, negs)
+        labeled_r["point_id"] = rname + "_" + labeled_r["point_id"].astype(str)  # 지역 prefix 로 고유화
+        parts.append(labeled_r)
 
-    print("[pipeline] 3/5 사고 스냅 + 도로 지점 샘플링")
-    acc_snapped = geo.snap_accidents_to_edges(accidents, edges, cfg)
-    candidates = geo.sample_points_along_edges(edges, cfg)
-
-    print("[pipeline] 4/5 exposure-matched negative 샘플링")
-    negs = negatives.sample_negatives(acc_snapped, candidates, cfg)
-    labeled = negatives.build_labeled_points(acc_snapped, negs)
+    labeled = gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), geometry="geometry", crs="EPSG:4326")
     cfg.ensure_dirs()
     labeled.to_file(cfg.points_path, driver="GPKG")
     print(f"[pipeline] 라벨 지점 저장: {cfg.points_path} "
-          f"(pos={int((labeled.label==1).sum())}, neg={int((labeled.label==0).sum())})")
+          f"(pos={int((labeled.label==1).sum())}, neg={int((labeled.label==0).sum())}, 총 {len(labeled)})")
 
     print("[pipeline] 5/5 이미지 수집")
     return collect_images(labeled, cfg, limit=limit)

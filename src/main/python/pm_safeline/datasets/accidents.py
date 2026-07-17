@@ -84,16 +84,7 @@ def _require_torch():
 # --------------------------------------------------------------------------- #
 _KOROAD_BASE_URL = "https://opendata.koroad.or.kr/data/rest/frequentzone"
 
-# 대전광역시 시도/시군구 코드 (KoROAD 오픈API 기준)
-_DAEJEON_SIDO = "30"
-_DAEJEON_GUGUN = {
-    "동구": "110",
-    "중구": "140",
-    "서구": "170",
-    "유성구": "200",
-    "대덕구": "230",
-}
-
+# 시도/시군구 코드는 config.REGIONS 에 정의(전국 확장은 거기 추가).
 _KOROAD_DEFAULT_YEARS = tuple(range(2017, 2025))  # 2017~2024
 
 
@@ -159,14 +150,13 @@ def _koroad_fetch(
     kind: str = "motorcycle",
     years: Iterable[int] = _KOROAD_DEFAULT_YEARS,
     api_key: str | None = None,
-    gugun: dict[str, str] | None = None,
     rows: int = 100,
     pause: float = 0.2,
     timeout: float = 15.0,
 ) -> "gpd.GeoDataFrame":
-    """대전 지역 {kind} 교통사고 다발지역을 연도×구 순회로 모두 받아 GeoDataFrame 반환.
+    """cfg.regions 의 모든 지역 {kind} 교통사고 다발지역을 지역×연도×구 순회로 받아 반환.
 
-    반환 스키마(WGS84): accident_id, datetime(NaT), lat, lon, severity, mode,
+    반환 스키마(WGS84): accident_id, region, datetime(NaT), lat, lon, severity, mode,
         occrrnc_cnt, caslt_cnt, dth_dnv_cnt, se_dnv_cnt, sl_dnv_cnt, wnd_dnv_cnt,
         year, sido_sgg_nm, spot_nm, geom_json, geometry(Point)
     """
@@ -174,53 +164,66 @@ def _koroad_fetch(
     import requests
     from shapely.geometry import Point
 
-    key = _api_key(api_key)
-    gu = gugun or _DAEJEON_GUGUN
-    rows_out: list[dict] = []
+    from .primitives.config import REGIONS
 
+    key = _api_key(api_key)
+    regions = [REGIONS[r] for r in cfg.regions if r in REGIONS]
+    unknown = [r for r in cfg.regions if r not in REGIONS]
+    if unknown:
+        print(f"[koroad] 알 수 없는 지역 무시: {unknown} (가능: {list(REGIONS)})")
+    if not regions:
+        raise ValueError(f"수집할 지역이 없습니다: {cfg.regions} (가능: {list(REGIONS)})")
+
+    rows_out: list[dict] = []
     with requests.Session() as session:
-        for year in years:
-            for gu_nm, gu_cd in gu.items():
-                page = 1
-                while True:
-                    payload = _fetch_page(session, kind, key, year, _DAEJEON_SIDO, gu_cd, page, rows, timeout)
-                    items = _iter_items(payload)
-                    for it in items:
+        for region in regions:
+            start = len(rows_out)
+            for year in years:
+                for gu_nm, gu_cd in region.gugun.items():
+                    page = 1
+                    while True:
                         try:
-                            lon = float(it["lo_crd"])
-                            lat = float(it["la_crd"])
-                        except (KeyError, TypeError, ValueError):
-                            continue
-                        dth = int(it.get("dth_dnv_cnt", 0) or 0)
-                        se = int(it.get("se_dnv_cnt", 0) or 0)
-                        sl = int(it.get("sl_dnv_cnt", 0) or 0)
-                        rows_out.append({
-                            "datetime": pd.NaT,
-                            "lat": lat,
-                            "lon": lon,
-                            "severity": _severity_from_counts(dth, se, sl),
-                            "mode": f"{kind}_frequentzone",
-                            "occrrnc_cnt": int(it.get("occrrnc_cnt", 0) or 0),
-                            "caslt_cnt": int(it.get("caslt_cnt", 0) or 0),
-                            "dth_dnv_cnt": dth,
-                            "se_dnv_cnt": se,
-                            "sl_dnv_cnt": sl,
-                            "wnd_dnv_cnt": int(it.get("wnd_dnv_cnt", 0) or 0),
-                            "year": year,
-                            "sido_sgg_nm": it.get("sido_sgg_nm"),
-                            "spot_nm": it.get("spot_nm"),
-                            "geom_json": it.get("geom_json"),
-                        })
-                    total = int(payload.get("totalCount", 0) or 0)
-                    got = page * rows
-                    if got >= total or not items:
-                        break
-                    page += 1
-                    time.sleep(pause)
-                print(f"[koroad] {kind} {year} {gu_nm}: 누적 {len(rows_out)}개 지역")
+                            payload = _fetch_page(session, kind, key, year, region.sido, gu_cd, page, rows, timeout)
+                            items = _iter_items(payload)
+                        except RuntimeError as e:  # 잘못된 코드/일시 오류 → 해당 구만 건너뜀
+                            print(f"[koroad] {region.name} {year} {gu_nm}: 건너뜀 ({str(e)[:50]})")
+                            break
+                        for it in items:
+                            try:
+                                lon = float(it["lo_crd"])
+                                lat = float(it["la_crd"])
+                            except (KeyError, TypeError, ValueError):
+                                continue
+                            dth = int(it.get("dth_dnv_cnt", 0) or 0)
+                            se = int(it.get("se_dnv_cnt", 0) or 0)
+                            sl = int(it.get("sl_dnv_cnt", 0) or 0)
+                            rows_out.append({
+                                "region": region.name,
+                                "datetime": pd.NaT,
+                                "lat": lat,
+                                "lon": lon,
+                                "severity": _severity_from_counts(dth, se, sl),
+                                "mode": f"{kind}_frequentzone",
+                                "occrrnc_cnt": int(it.get("occrrnc_cnt", 0) or 0),
+                                "caslt_cnt": int(it.get("caslt_cnt", 0) or 0),
+                                "dth_dnv_cnt": dth,
+                                "se_dnv_cnt": se,
+                                "sl_dnv_cnt": sl,
+                                "wnd_dnv_cnt": int(it.get("wnd_dnv_cnt", 0) or 0),
+                                "year": year,
+                                "sido_sgg_nm": it.get("sido_sgg_nm"),
+                                "spot_nm": it.get("spot_nm"),
+                                "geom_json": it.get("geom_json"),
+                            })
+                        total = int(payload.get("totalCount", 0) or 0)
+                        if page * rows >= total or not items:
+                            break
+                        page += 1
+                        time.sleep(pause)
+            print(f"[koroad] {region.name}: {len(rows_out) - start}개 지역")
 
     if not rows_out:
-        raise ValueError("KoROAD 응답에서 다발지역을 하나도 받지 못했습니다(연도/코드/인증키 확인).")
+        raise ValueError("KoROAD 응답에서 다발지역을 하나도 받지 못했습니다(지역/연도/인증키 확인).")
 
     df = pd.DataFrame(rows_out).reset_index(drop=True)
     # 사고 좌표는 데이터가 정한다 — bbox 로 임의로 자르지 않는다(KoROAD 가 준 지점 전부 사용).
@@ -426,16 +429,21 @@ def load_accidents(
 
 
 def _drop_out_of_region(gdf, cfg: Config):
-    """대전시 범위(cfg.bbox) 밖 좌표 = 데이터 입력 오류로 보고 제외.
+    """선택 지역(cfg.regions) 범위 밖 좌표 = 데이터 입력 오류로 보고 제외.
 
-    사고 지점을 임의로 자르는 게 아니라, '대전 데이터셋인데 좌표가 서울' 같은 명백한
-    좌표 오류만 걸러낸다. (파일럿 중심부 crop 아님 — cfg.bbox 는 대전 전역 범위)
+    사고 지점을 임의로 자르는 게 아니라, '대전 데이터인데 좌표가 서울' 같은 명백한
+    좌표 오류만 걸러낸다. 여러 지역이면 각 지역 bbox 의 합집합으로 판정.
     """
-    w, s, e, n = cfg.bbox
-    inb = gdf["lat"].between(s, n) & gdf["lon"].between(w, e)
+    from .primitives.config import REGIONS
+
+    bboxes = [REGIONS[r].bbox for r in cfg.regions if r in REGIONS] or [cfg.bbox]
+    inb = None
+    for w, s, e, n in bboxes:
+        cond = gdf["lat"].between(s, n) & gdf["lon"].between(w, e)
+        inb = cond if inb is None else (inb | cond)
     dropped = int((~inb).sum())
     if dropped:
-        print(f"[accidents] 대전 범위 밖 좌표(오류 의심) {dropped}건 제외")
+        print(f"[accidents] 선택 지역 범위 밖 좌표(오류 의심) {dropped}건 제외")
     return gdf[inb].reset_index(drop=True)
 
 

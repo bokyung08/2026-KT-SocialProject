@@ -59,6 +59,33 @@ SEVERITY_ORDER = ["경상", "중상", "사망"]
 
 
 @dataclass(frozen=True)
+class Region:
+    """수집 대상 행정구역 — KoROAD siDo/guGun 코드 + 좌표 유효성 bbox.
+
+    전국 전이(§4.4/§6)가 목표라, teacher 학습 데이터는 여러 지역의 도로 구조를
+    다양하게 담는 게 좋다. 새 지역은 REGIONS 에 코드를 추가하면 된다(guGun 필수).
+    """
+
+    name: str
+    sido: str
+    gugun: dict[str, str]                    # {구이름: KoROAD guGun 코드}
+    bbox: tuple[float, float, float, float]  # (W, S, E, N) 좌표 유효성 필터
+
+
+# KoROAD 실 API 로 코드 검증 완료. siDo 만으론 조회 불가(guGun 필수).
+REGIONS: dict[str, Region] = {
+    "daejeon": Region("daejeon", "30",
+                      {"동구": "110", "중구": "140", "서구": "170", "유성구": "200", "대덕구": "230"},
+                      (127.24, 36.17, 127.57, 36.51)),
+    "sejong": Region("sejong", "36", {"세종": "110"},
+                     (127.15, 36.40, 127.42, 36.75)),
+    "cheongju": Region("cheongju", "43",
+                       {"상당구": "111", "서원구": "112", "흥덕구": "113", "청원구": "114"},
+                       (127.30, 36.45, 127.75, 36.90)),
+}
+
+
+@dataclass(frozen=True)
 class StreetViewConfig:
     """스트리트뷰 이미지 요청 파라미터.
 
@@ -87,6 +114,14 @@ class Config:
 
     bbox: tuple[float, float, float, float] = DAEJEON_BBOX
     metric_crs: str = METRIC_CRS
+
+    # 수집 대상 지역(REGIONS 키). 전국 전이 목표 → 다지역 다양성 권장(예: daejeon,sejong,cheongju).
+    # 환경변수 PM_REGIONS="daejeon,sejong" 로도 지정 가능.
+    regions: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            r.strip() for r in os.environ.get("PM_REGIONS", "daejeon").split(",") if r.strip()
+        )
+    )
 
     # 데이터 루트. 기본은 저장소 상대 경로.
     data_dir: Path = field(default_factory=lambda: _default_data_dir())

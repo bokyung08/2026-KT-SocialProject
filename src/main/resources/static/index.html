@@ -43,15 +43,13 @@
     min-height: 100vh;
   }
 
-  /* ---- mobile app shell ---- */
+  /* ---- app shell (mobile: full width) ---- */
   #app {
     width: 100%;
-    max-width: 420px;
     min-height: 100vh;
     background: var(--bg);
     display: flex;
     flex-direction: column;
-    box-shadow: 0 0 40px rgba(0,0,0,0.06);
   }
 
   header {
@@ -103,6 +101,41 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
+  }
+
+  /* 좌/우 칼럼 그룹 (모바일: 세로로 쌓임) */
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+
+  /* ---- desktop: 좌(경로 탐색+결과) / 우(지도) 2칼럼 ---- */
+  @media (min-width: 900px) {
+    #app {
+      max-width: 1200px;
+      margin: 0 auto;
+      box-shadow: 0 0 60px rgba(0,0,0,0.06);
+    }
+    header {
+      padding: 24px 32px 8px;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(360px, 460px) 1fr;
+      align-items: start;
+      gap: 28px;
+      padding: 8px 32px 36px;
+    }
+    .col-right {
+      position: sticky;
+      top: 24px;
+    }
+    #map {
+      height: calc(100vh - 150px);
+      min-height: 480px;
+    }
   }
 
   #banner {
@@ -394,7 +427,7 @@
     background: var(--surface);
   }
   #map {
-    height: 300px;
+    height: 340px;
     background: #dfe3e0;
     position: relative;
   }
@@ -443,6 +476,7 @@
   </header>
 
   <main>
+    <div class="col col-left">
     <div id="banner">
       <div>라우팅 엔진 비활성 — 서버에 <b>PM_OSM_FILE</b> 설정 필요. <code>/route</code> 는 503.</div>
       <button id="bannerClose" title="닫기">×</button>
@@ -516,13 +550,16 @@
         <div class="empty-state" id="resultsEmpty">출발지와 목적지를 지정한 뒤<br/>"경로 탐색"을 눌러주세요.</div>
       </div>
     </section>
+    </div>
 
+    <div class="col col-right">
     <section class="block">
       <h2 class="section-label">내 위치 지도</h2>
       <div id="mapCard">
         <div id="map"></div>
       </div>
     </section>
+    </div>
   </main>
 </div>
 

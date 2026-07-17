@@ -12,7 +12,8 @@ torchvision 포맷 PyTorch `Dataset`으로 제공한다.
 pm_proj/
 ├── utils/       # 저수준 primitives
 │   ├── config.py       설정(대전 BBOX·경로·스트리트뷰/샘플링)
-│   ├── taas.py         TAAS 사고 CSV/XLSX 로드(컬럼 자동탐지·PM 필터)
+│   ├── koroad.py       KoROAD 이륜차 교통사고 다발지역 오픈API 자동 다운로드(기본 사고 소스)
+│   ├── taas.py         TAAS 사고 CSV/XLSX 로드(컬럼 자동탐지·PM 필터, 수동 소스)
 │   ├── geo.py          OSM 도로망 → 고정간격 지점 + 방위각, 사고점 스냅
 │   ├── negatives.py    exposure-matched negative 샘플링(§4.5-2)
 │   └── streetview.py   스트리트뷰 provider(mock/google/naver-stub)
@@ -41,21 +42,26 @@ cd src/main/python
 # 0) 설정 점검 (torch 불필요)
 python -m pm_proj check
 
-# 1) TAAS 원본을 data/raw/ 에 수동 다운로드 (koroad.or.kr TAAS)
-#    - data.go.kr/TAAS 자동 다운로드는 anti-bot 차단(메모리 확인). CSV/XLSX 수동 저장.
+# 1) 사고 데이터: KoROAD 이륜차 다발지역 오픈API 자동 다운로드 (기본 소스)
+#    인증키는 https://opendata.koroad.or.kr 에서 발급 -> 환경변수로 지정.
+KOROAD_API_KEY=<KEY> python -m pm_proj download            # data/raw/ 에 캐시
+#    (수동 소스를 쓰려면 대신 data/raw/ 에 TAAS CSV/XLSX 를 넣고 collect --source taas)
 
-# 2) 수집 파이프라인 — 네트워크/키 없이 검증(mock 이미지)
-PM_SV_PROVIDER=mock python -m pm_proj collect --limit 50
+# 2) 수집 파이프라인 — 사고(koroad) + OSM + negative + 이미지
+#    네트워크/키 없이 이미지 단계만 검증하려면 mock provider:
+KOROAD_API_KEY=<KEY> PM_SV_PROVIDER=mock python -m pm_proj collect --limit 50
 
-# 2') 실제 수집 (Google Street View Static API)
-PM_SV_PROVIDER=google PM_SV_API_KEY=<KEY> python -m pm_proj collect
+# 2') 실제 이미지 수집 (Google Street View Static API)
+KOROAD_API_KEY=<KEY> PM_SV_PROVIDER=google PM_SV_API_KEY=<SV_KEY> python -m pm_proj collect
 
 # 3) 통계
 python -m pm_proj stats
 ```
 
-산출물(`data/`, 기본은 `PM_DATA_DIR` 또는 CWD 하위):
-- `raw/` — 사용자가 넣는 TAAS 원본
+데이터 저장 위치: 항상 **프로젝트 루트의 `data/`** (CWD 무관, gitignore 됨). `PM_DATA_DIR` 로 재정의 가능.
+
+산출물(`<repo>/data/`):
+- `raw/` — KoROAD 다운로드 캐시(`koroad_motorcycle_frequentzone.csv`) 또는 수동 TAAS 원본
 - `sample_points.gpkg` — 라벨 지점(사고=1/대조=0, heading 포함)
 - `streetview/{accident,control}/<point_id>_h###.jpg` — torchvision ImageFolder 레이아웃
 - `manifest.csv` — `point_id,label,class,lat,lon,heading,severity,mode,path`

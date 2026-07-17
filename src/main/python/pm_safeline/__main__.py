@@ -26,18 +26,18 @@ def _cfg_from_args(args) -> Config:
 
 
 def cmd_collect(args) -> None:
-    from .datasets import collect
+    from .datasets.roadview import build_roadview_dataset
 
     cfg = _cfg_from_args(args)
-    collect.run_pipeline(cfg, source=args.source, pm_only=not args.all_modes, limit=args.limit)
+    build_roadview_dataset(cfg, source=args.source, pm_only=not args.all_modes, limit=args.limit)
 
 
 def cmd_download(args) -> None:
     """KoROAD 다발지역 오픈API 만 받아 data/raw/ 에 캐시(수집/이미지 없이)."""
-    from .utils import koroad
+    from .datasets.accidents import load_accidents
 
     cfg = _cfg_from_args(args)
-    gdf = koroad.download_to_raw(cfg, kind=args.kind)
+    gdf = load_accidents(source="koroad", cfg=cfg, download=True, kind=args.kind)
     print(f"[download] {len(gdf)}개 다발지역 -> {cfg.raw_dir}")
 
 
@@ -59,8 +59,9 @@ def cmd_stats(args) -> None:
 def cmd_check(args) -> None:
     """수집 없이 import/설정 sanity check (torch 불필요)."""
     cfg = _cfg_from_args(args)
-    from .utils import geo, negatives, streetview, taas  # noqa: F401
-    from .datasets import collect  # noqa: F401
+    from .utils import geo, negatives, streetview  # noqa: F401
+    from .datasets.accidents import load_accidents  # noqa: F401
+    from .datasets.roadview import build_roadview_dataset  # noqa: F401
 
     print("[check] 수집 모듈 import OK (torch 불필요)")
     print(f"[check] bbox={cfg.bbox}  data_dir={cfg.data_dir}  provider={cfg.streetview.provider}")

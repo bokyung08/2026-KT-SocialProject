@@ -1,11 +1,11 @@
-package kt.dinjae.traffic.plugins
+package kt.dinjae.pm_safeline.plugins
 
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
-import kt.dinjae.traffic.api.ErrorResponse
-import kt.dinjae.traffic.routing.RoutingException
+import kt.dinjae.pm_safeline.api.ErrorResponse
+import kt.dinjae.pm_safeline.routing.RoutingException
 
 fun Application.configureStatusPages() {
     install(StatusPages) {

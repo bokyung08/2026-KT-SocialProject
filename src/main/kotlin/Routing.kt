@@ -1,4 +1,4 @@
-package kt.dinjae.traffic
+package kt.dinjae.pm_safeline
 
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -6,11 +6,11 @@ import io.ktor.server.http.content.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import kt.dinjae.traffic.api.ErrorResponse
-import kt.dinjae.traffic.api.HealthResponse
-import kt.dinjae.traffic.api.RouteRequest
-import kt.dinjae.traffic.routing.PmCostWeights
-import kt.dinjae.traffic.routing.RoutingModule
+import kt.dinjae.pm_safeline.api.ErrorResponse
+import kt.dinjae.pm_safeline.api.HealthResponse
+import kt.dinjae.pm_safeline.api.RouteRequest
+import kt.dinjae.pm_safeline.routing.PmCostWeights
+import kt.dinjae.pm_safeline.routing.RoutingModule
 
 /**
  * 라우팅 서브시스템을 구성하고 REST 엔드포인트를 등록한다.

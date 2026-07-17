@@ -1,4 +1,4 @@
-package kt.dinjae.traffic.api
+package kt.dinjae.pm_safeline.api
 
 import kotlinx.serialization.Serializable
 

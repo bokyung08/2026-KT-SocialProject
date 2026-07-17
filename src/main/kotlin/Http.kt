@@ -1,4 +1,4 @@
-package kt.dinjae.traffic
+package kt.dinjae.pm_safeline
 
 import io.ktor.server.application.*
 import io.ktor.server.plugins.openapi.*

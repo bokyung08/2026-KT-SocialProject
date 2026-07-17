@@ -75,7 +75,7 @@ def cmd_check(args) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="pm_proj", description="PM 로드뷰 위험도 데이터셋 구축")
+    p = argparse.ArgumentParser(prog="pm_safeline", description="PM 로드뷰 위험도 데이터셋 구축")
     p.add_argument("--data-dir", help="데이터 루트(기본 env PM_DATA_DIR 또는 ./data)")
     sub = p.add_subparsers(dest="cmd", required=True)
 

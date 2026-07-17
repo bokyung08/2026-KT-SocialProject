@@ -18,7 +18,7 @@ DAEJEON_BBOX: tuple[float, float, float, float] = (127.30, 36.31, 127.43, 36.39)
 METRIC_CRS = "EPSG:32652"
 WGS84 = "EPSG:4326"
 
-# 프로젝트 루트 = .../src/main/python/pm_proj/utils/config.py 기준 5단계 상위
+# 프로젝트 루트 = .../src/main/python/pm_safeline/utils/config.py 기준 5단계 상위
 _PROJECT_ROOT = Path(__file__).resolve().parents[5]
 
 

@@ -1,11 +1,11 @@
-package kt.dinjae.traffic
+package kt.dinjae.pm_safeline
 
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import kt.dinjae.traffic.plugins.configureSerialization
-import kt.dinjae.traffic.plugins.configureStatusPages
+import kt.dinjae.pm_safeline.plugins.configureSerialization
+import kt.dinjae.pm_safeline.plugins.configureStatusPages
 import kotlin.test.*
 
 class ServerTest {

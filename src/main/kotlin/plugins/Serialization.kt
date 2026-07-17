@@ -1,4 +1,4 @@
-package kt.dinjae.traffic.plugins
+package kt.dinjae.pm_safeline.plugins
 
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*

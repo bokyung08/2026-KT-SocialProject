@@ -1,4 +1,4 @@
-package kt.dinjae.traffic.routing
+package kt.dinjae.pm_safeline.routing
 
 import io.ktor.server.config.ApplicationConfig
 import io.ktor.server.config.tryGetString

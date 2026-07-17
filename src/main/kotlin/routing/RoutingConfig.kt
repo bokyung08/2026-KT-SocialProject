@@ -1,4 +1,4 @@
-package kt.dinjae.traffic.routing
+package kt.dinjae.pm_safeline.routing
 
 /**
  * GraphHopper 엔진/프로파일 설정. Ktor application.yaml 또는 환경변수에서 주입.

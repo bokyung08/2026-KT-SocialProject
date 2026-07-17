@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>고령자 이동 에이전트 — 프로젝트 제안서</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Noto+Sans+KR:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #D92B2B; --red-light: #F5E5E5;
+    --dark: #1A1A1A; --mid: #444; --muted: #888; --border: #E0E0E0;
+    --bg: #FAFAF8; --white: #FFFFFF;
+    --accent: #0A3D91; --accent-light: #EAF0FB;
+    --teal: #0F7A5A; --teal-light: #E3F4EE;
+    --amber: #B05E0A; --amber-light: #FDF0E0;
+    --purple: #5A3AB5; --purple-light: #EEEAFB;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--dark); line-height: 1.8; font-size: 15px; }
+
+  header { background: var(--dark); color: var(--white); padding: 72px 0 56px; position: relative; overflow: hidden; }
+  header::before { content: ''; position: absolute; top: -40px; right: -60px; width: 320px; height: 320px; border-radius: 50%; border: 60px solid rgba(15,122,90,0.18); }
+  header::after { content: ''; position: absolute; bottom: -80px; left: 30%; width: 200px; height: 200px; border-radius: 50%; border: 40px solid rgba(15,122,90,0.10); }
+  .header-inner { max-width: 900px; margin: 0 auto; padding: 0 48px; position: relative; z-index: 1; }
+  .header-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--teal); text-transform: uppercase; margin-bottom: 20px; }
+  header h1 { font-family: 'Noto Serif KR', serif; font-size: 32px; font-weight: 700; line-height: 1.4; margin-bottom: 16px; letter-spacing: -0.02em; }
+  header h1 em { color: var(--teal); font-style: normal; }
+  .header-tagline { margin-top: 20px; padding: 14px 20px; background: rgba(15,122,90,0.15); border-left: 3px solid var(--teal); border-radius: 0 6px 6px 0; }
+  .header-tagline p { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: rgba(255,255,255,0.9); margin: 0; line-height: 1.6; letter-spacing: 0.01em; }
+  .header-meta { display: flex; gap: 24px; margin-top: 24px; flex-wrap: wrap; }
+  .meta-item { font-size: 12px; color: rgba(255,255,255,0.5); font-family: 'IBM Plex Mono', monospace; }
+  .meta-item span { color: rgba(255,255,255,0.9); margin-left: 6px; }
+
+  nav { background: var(--white); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+  .nav-inner { max-width: 900px; margin: 0 auto; padding: 0 48px; display: flex; overflow-x: auto; }
+  .nav-inner a { font-size: 12px; font-weight: 500; color: var(--muted); text-decoration: none; padding: 14px 16px; white-space: nowrap; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .nav-inner a:hover { color: var(--dark); border-bottom-color: var(--teal); }
+
+  main { max-width: 900px; margin: 0 auto; padding: 0 48px 80px; }
+  section { padding: 56px 0; border-bottom: 1px solid var(--border); }
+  section:last-child { border-bottom: none; }
+  .section-number { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--teal); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 10px; }
+  section h2 { font-family: 'Noto Serif KR', serif; font-size: 24px; font-weight: 700; color: var(--dark); margin-bottom: 28px; letter-spacing: -0.01em; line-height: 1.4; }
+  section h3 { font-size: 16px; font-weight: 600; color: var(--dark); margin: 32px 0 14px; }
+  section h3.sub { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin: 28px 0 14px; }
+
+  p { margin-bottom: 16px; color: var(--mid); line-height: 1.9; }
+  p:last-child { margin-bottom: 0; }
+  strong { color: var(--dark); font-weight: 600; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .callout { background: var(--red-light); border-left: 3px solid var(--red); padding: 16px 20px; border-radius: 0 6px 6px 0; margin: 24px 0; }
+  .callout p { color: var(--dark); margin: 0; font-size: 14px; line-height: 1.7; }
+  .callout.teal { background: var(--teal-light); border-color: var(--teal); }
+  .callout.amber { background: var(--amber-light); border-color: var(--amber); }
+  .callout.blue { background: var(--accent-light); border-color: var(--accent); }
+  .callout.purple { background: var(--purple-light); border-color: var(--purple); }
+
+  .table-wrap { overflow-x: auto; margin: 24px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead tr { background: var(--dark); color: var(--white); }
+  thead th { padding: 12px 16px; text-align: left; font-weight: 500; font-size: 12px; letter-spacing: 0.04em; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:nth-child(even) { background: #F6F6F4; }
+  tbody td { padding: 12px 16px; color: var(--mid); vertical-align: top; line-height: 1.6; }
+  tbody td:first-child { color: var(--dark); font-weight: 500; }
+
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 3px; font-weight: 500; letter-spacing: 0.04em; vertical-align: middle; margin-left: 4px; }
+  .badge-red { background: var(--red-light); color: var(--red); }
+  .badge-teal { background: var(--teal-light); color: var(--teal); }
+  .badge-amber { background: var(--amber-light); color: var(--amber); }
+  .badge-blue { background: var(--accent-light); color: var(--accent); }
+  .badge-gray { background: #EEEEEC; color: #555; }
+  .badge-purple { background: var(--purple-light); color: var(--purple); }
+
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
+  .card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 20px 22px; }
+  .card h4 { font-size: 14px; font-weight: 600; color: var(--dark); margin-bottom: 8px; }
+  .card p { font-size: 13px; margin: 0; }
+
+  .compare-row { display: grid; grid-template-columns: 1fr 36px 1fr; gap: 0; margin: 24px 0; align-items: stretch; }
+  .compare-side { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 20px 22px; }
+  .compare-side.ours { border-color: var(--teal); border-width: 2px; }
+  .compare-side h4 { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; }
+  .compare-side.ours h4 { color: var(--teal); }
+  .compare-side.theirs h4 { color: var(--muted); }
+  .compare-side ul { padding-left: 16px; }
+  .compare-side li { font-size: 13px; color: var(--mid); margin-bottom: 6px; line-height: 1.6; }
+  .compare-divider { display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--muted); }
+
+  /* 타임라인 / 흐름 */
+  .flow-grid { display: flex; flex-direction: column; gap: 0; margin: 28px 0; }
+  .flow-step { display: grid; grid-template-columns: 48px 1fr; gap: 18px; padding: 18px 0; border-bottom: 1px dashed var(--border); position: relative; }
+  .flow-step:last-child { border-bottom: none; }
+  .flow-num { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: var(--white); background: var(--teal); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .flow-step h4 { font-size: 14.5px; font-weight: 600; color: var(--dark); margin-bottom: 4px; }
+  .flow-step p { font-size: 13px; margin: 0; }
+  .flow-tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-top: 8px; font-family: 'IBM Plex Mono', monospace; }
+
+  /* 난이도 카드 */
+  .diff-grid { display: flex; flex-direction: column; gap: 10px; margin: 24px 0; }
+  .diff-card { background: var(--white); border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 16px 20px; }
+  .diff-card.low { border-left-color: var(--teal); }
+  .diff-card.mid { border-left-color: var(--amber); }
+  .diff-card.high { border-left-color: var(--red); }
+  .diff-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .diff-head h4 { font-size: 14px; font-weight: 600; color: var(--dark); }
+  .diff-stars { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 1px; }
+  .diff-card.low .diff-stars { color: var(--teal); }
+  .diff-card.mid .diff-stars { color: var(--amber); }
+  .diff-card.high .diff-stars { color: var(--red); }
+  .diff-card p { font-size: 13px; margin: 0; }
+
+  .paper { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 18px 22px; margin-bottom: 10px; display: flex; gap: 14px; align-items: flex-start; }
+  .paper-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; padding-top: 3px; min-width: 22px; }
+  .paper-body h4 { font-size: 14px; font-weight: 600; color: var(--dark); margin-bottom: 4px; line-height: 1.5; }
+  .paper-body p { font-size: 13px; margin-bottom: 6px; }
+  .paper-body .paper-meta { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); margin: 0; }
+  .ref-video { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; margin: 14px 0 4px; background: #000; }
+  .v-img, section img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; margin: 14px 0 4px; }
+
+  .quote-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 18px 22px; margin-bottom: 12px; }
+  .quote-card .who { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+  .quote-card .what { font-size: 13.5px; color: var(--mid); font-style: italic; line-height: 1.7; }
+
+  .feature-list { list-style: none; margin: 20px 0; }
+  .feature-list li { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--mid); align-items: flex-start; }
+  .feature-list li:last-child { border-bottom: none; }
+  .feature-list .fi { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); flex-shrink: 0; margin-top: 7px; }
+
+  .scope-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
+  .scope-card { border-radius: 8px; padding: 18px 20px; }
+  .scope-card.in { background: var(--teal-light); border: 1px solid var(--teal); }
+  .scope-card.out { background: #F2F2F0; border: 1px solid var(--border); }
+  .scope-card h4 { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px; }
+  .scope-card.in h4 { color: var(--teal); }
+  .scope-card.out h4 { color: var(--muted); }
+  .scope-card ul { padding-left: 16px; }
+  .scope-card li { font-size: 13px; color: var(--mid); margin-bottom: 6px; line-height: 1.6; }
+
+  footer { background: var(--dark); color: rgba(255,255,255,0.4); text-align: center; padding: 28px; font-size: 12px; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.05em; }
+
+  @media (max-width: 720px) {
+    .card-grid, .compare-row, .scope-grid { grid-template-columns: 1fr; }
+    .compare-divider { display: none; }
+    header h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-label">2026 KT 디지털인재장학생 · AI기반 사회문제해결 프로젝트</div>
+    <h1>고령자를 위한<br><em>대화형 이동 에이전트</em><br>— 말로 묻고, 보고, 떠나는 이동 경험</h1>
+    <div class="header-tagline">
+      <p>멀티턴 대화로 목적지를 확정하고, 지도 위에서 경로·교통수단을 함께 고른 뒤, 마지막 구간까지 자연스럽게 이어주는 고령자 친화형 이동 에이전트</p>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">소속<span>대전·충청 7인 팀</span></div>
+      <div class="meta-item">프로젝트 기간<span>2026.05.15 — 08.28</span></div>
+      <div class="meta-item">협력기관<span>한국교통안전공단 · KT</span></div>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <div class="nav-inner">
+    <a href="#s1">① 문제 정의</a>
+    <a href="#s2">② 주제 변경 배경</a>
+    <a href="#s3">③ 서비스 흐름</a>
+    <a href="#s4">④ 구현 범위</a>
+    <a href="#s5">⑤ 난이도 분석</a>
+    <a href="#s6">⑥ 차별점</a>
+    <a href="#s7">⑦ 디자인 참고</a>
+  </div>
+</nav>
+
+<main>
+
+  <!-- 1 -->
+  <section id="s1">
+    <div class="section-number">Section 01</div>
+    <h2>문제 정의</h2>
+    <p>고령자는 대중교통을 이용할 때 두 종류의 장벽을 동시에 만난다. 하나는 <strong>앱 자체의 복잡함</strong>이다. 버스 앱, 지하철 앱, 길찾기 앱마다 메뉴 구조가 다르고, 원하는 기능까지 가려면 여러 화면을 거쳐야 한다. 다른 하나는 <strong>환승 구간의 막막함</strong>이다. 버스에서 내려 다음 교통수단으로 이어가야 하는 순간, 어디로 가야 하는지, 무엇을 타야 하는지 판단할 정보가 부족하다.</p>
+    <div class="callout teal">
+      <p><strong>핵심 문제 정의 —</strong> 기존 음성 호출형 서비스(예: "차 불러줘")는 단발성 명령 처리에 머물러, 고령자가 실제로 겪는 "목적지를 정하고 → 경로를 비교하고 → 환승까지 이어가는" 연속적인 의사결정 과정을 지원하지 못한다.</p>
+    </div>
+    <p>본 프로젝트는 <strong>대화로 목적지를 확정하고, 지도로 경로를 함께 확인하고, 마지막 구간까지 자연스럽게 안내하는 멀티턴 이동 에이전트</strong>를 제안한다. 음성은 입력 방식 중 하나일 뿐이며, 핵심은 다단계 의도 파악과 상태 관리에 있다.</p>
+  </section>
+
+  <!-- 2 -->
+  <section id="s2">
+    <div class="section-number">Section 02</div>
+    <h2>주제 변경 배경</h2>
+    <p>본 팀은 초기 투표에서 <strong>PM 고위험 지역 예측 및 알림(4명)</strong>과 <strong>고령자 어플 사용성 개선(3명)</strong>을 검토했다. 이후 공단 자문 결과, 데이터 제약이 명확해지며 주제 우선순위를 재조정했다.</p>
+
+    <h3 class="sub">공단 자문 의견 (조용빈 선임연구원)</h3>
+    <div class="quote-card">
+      <div class="who">PM 고위험 지역 예측 및 알림</div>
+      <div class="what">"주제의 핵심이 되는 PM 이동량·사용량·사고 위치 데이터는 공단에서 제공해 드리기 어려운 데이터입니다... 다른 주제를 검토해보면 좋지 않을까 싶습니다."</div>
+    </div>
+    <div class="quote-card">
+      <div class="who">고령자 앱 사용성 개선 서비스</div>
+      <div class="what">"방향 자체는 좋습니다만, 음성 기반 DRT 호출 기능(ASR-LLM-TTS)은 현재 유사한 방향으로 추진되고 있는 사항이 있어, 이 부분만으로는 차별점이 약할 수 있습니다."</div>
+    </div>
+
+    <div class="callout amber">
+      <p><strong>판단 —</strong> PM 주제는 핵심 데이터 자체가 제공 불가하여 진행이 어렵다고 판단했다. 고령자 주제는 "차별점이 약할 수 있다"는 지적이었으나, 이는 음성 호출이라는 입력 방식에 대한 평가였다. 처리 방식을 단발성 명령 호출에서 <strong>다단계 대화형 에이전트</strong>로 재설계하면 지적된 중복성을 해소할 수 있다고 보고 주제를 구체화했다.</p>
+    </div>
+
+    <div class="compare-row">
+      <div class="compare-side theirs">
+        <h4>기존 음성 DRT 호출형</h4>
+        <ul>
+          <li>"차 불러줘" → 즉시 API 호출 1회</li>
+          <li>이전 대화 맥락을 기억하지 못함 (stateless)</li>
+          <li>경로·교통수단 비교 기능 없음</li>
+          <li>환승 구간 안내 없음</li>
+        </ul>
+      </div>
+      <div class="compare-divider">vs</div>
+      <div class="compare-side ours">
+        <h4>본 프로젝트 — 대화형 이동 에이전트</h4>
+        <ul>
+          <li>멀티턴 대화로 목적지·조건을 단계적으로 확정 (stateful)</li>
+          <li>지도 위에서 경로·교통수단 후보를 비교 후 선택</li>
+          <li>선택한 경로를 따라 단계별 안내</li>
+          <li>환승 시점에 다음 이동수단까지 자연스럽게 연결</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section id="s3">
+    <div class="section-number">Section 03</div>
+    <h2>서비스 흐름</h2>
+    <p>서비스는 다섯 단계로 구성된다. 각 단계는 독립적으로 동작하면서도, 하나의 대화 세션 안에서 상태를 이어받아 누적된다.</p>
+
+    <div class="flow-grid">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div>
+          <h4>멀티턴 대화로 목적지 확정</h4>
+          <p>"병원 가야 하는데"처럼 불완전한 요청에서 시작해, 에이전트가 출발지·목적지·시간 제약을 단계적으로 채워간다. 한 번에 모든 정보를 요구하지 않는다.</p>
+          <span class="flow-tag badge-teal">난이도 낮음~중간</span>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div>
+          <h4>지도에 경로 표시</h4>
+          <p>확정된 목적지를 기준으로 지도 위에 가능한 경로를 시각화한다. 버스·지하철·도보 등 복수 옵션을 한눈에 비교할 수 있다.</p>
+          <span class="flow-tag badge-amber">난이도 중간</span>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div>
+          <h4>선호 경로·교통수단 선택</h4>
+          <p>사용자가 제시된 옵션 중 하나를 직접 선택한다. 에이전트가 추천하되 결정은 항상 사용자가 한다.</p>
+          <span class="flow-tag badge-teal">난이도 낮음</span>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div>
+          <h4>경로 안내</h4>
+          <p>선택된 경로를 따라 다음 행동을 단계적으로 안내한다. 현재 위치 기준으로 "다음에 무엇을 해야 하는지"에 집중한다.</p>
+          <span class="flow-tag badge-teal">난이도 낮음~중간</span>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">5</div>
+        <div>
+          <h4>환승 구간 연결</h4>
+          <p>경로상 다음 교통수단으로 전환이 필요한 지점에 도착하면, 에이전트가 해당 수단 연결을 보조한다. 최종 실행 확정은 사용자가 직접 한다.</p>
+          <span class="flow-tag badge-red">난이도 높음</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section id="s4">
+    <div class="section-number">Section 04</div>
+    <h2>구현 범위 — 한 달 프로토타입 기준</h2>
+    <p>본 프로젝트는 15주 일정의 학생 프로젝트로, 상용 서비스 출시가 아니라 <strong>컨셉 검증 가능한 프로토타입</strong> 구현을 목표로 한다. 외부 서비스와의 정식 제휴는 범위 밖이며, 필요 시 이후 단계에서 공단·KT를 통해 별도로 검토될 사항이다.</p>
+
+    <div class="scope-grid">
+      <div class="scope-card in">
+        <h4>이번 단계에서 구현</h4>
+        <ul>
+          <li>멀티턴 대화 기반 의도 파악 (슬롯 필링)</li>
+          <li>공공 API 기반 버스·지하철 도착정보 조회</li>
+          <li>2D 지도 위 경로 시각화 및 옵션 비교</li>
+          <li>고정된 데모 환경(단일 기종·OS)에서의 환승 연결 시연</li>
+        </ul>
+      </div>
+      <div class="scope-card out">
+        <h4>이번 단계에서 제외</h4>
+        <ul>
+          <li>민간 서비스(카카오T 등)와의 정식 API 제휴</li>
+          <li>다양한 기기·OS 환경에서의 범용 동작 보장</li>
+          <li>결제·실행 단계의 완전 자동화</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout amber">
+      <p><strong>팀 회의 결정 필요 — 3D 지도 적용 여부</strong><br>2D 경로 시각화는 구현 부담이 작고 일정 내 확실히 가능하다. 3D 지도(빌딩 렌더링, 카메라 틸트 등)는 시각적 임팩트가 크지만 별도 학습 곡선이 있어 1~2주가 추가로 소요될 수 있다. 발표가 "사내 공유회" 성격임을 고려하면 시각적 효과의 가치가 작지 않으므로, 풀 3D 구현 대신 핵심 구간만 3D로 보여주는 절충안도 함께 검토한다.<br><br><strong>디자인 레퍼런스:</strong> <a href="https://dribbble.com/shots/23877304-Sinport-mobile-app-UI-design-for-Singapore-Airport-navigation" target="_blank">Sinport — Singapore Airport navigation UI ↗</a> (카드형 내비게이션 레이아웃 참고용, 저작물 출처 표기)</p>
+    </div>
+
+    <div class="callout blue">
+      <p><strong>역할 구분 —</strong> 에이전트는 탐색·비교·판단까지를 맡고, 결제나 최종 실행처럼 책임이 따르는 동작은 사용자가 직접 확정한다. 이 구분은 구현 난이도를 낮추는 동시에, 발표 과정에서 "무엇을 실제로 구현했는지"를 명확하게 설명할 수 있게 한다.</p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section id="s5">
+    <div class="section-number">Section 05</div>
+    <h2>단계별 난이도 분석</h2>
+    <p>다섯 단계 중 1~4단계는 합쳐서 약 2주 내 프로토타입이 가능한 수준이다. 일정 리스크는 5단계(환승 구간 연결)에 집중되어 있다.</p>
+
+    <div class="diff-grid">
+      <div class="diff-card low">
+        <div class="diff-head">
+          <h4>1. 멀티턴 대화로 목적지 확정</h4>
+          <span class="diff-stars">●●○○○</span>
+        </div>
+        <p>LLM function calling으로 출발지·목적지·시간 슬롯을 단계적으로 채우는 구조. 정립된 패턴으로 1주 내 프로토타입 가능.</p>
+      </div>
+      <div class="diff-card mid">
+        <div class="diff-head">
+          <h4>2. 지도에 경로 표시</h4>
+          <span class="diff-stars">●●●○○</span>
+        </div>
+        <p>2D 경로 시각화는 지도 API로 1~2일 내 가능. 3D 렌더링은 학습 곡선이 있어 1~2주 추가 소요 — 적용 여부는 팀 회의에서 결정.</p>
+      </div>
+      <div class="diff-card low">
+        <div class="diff-head">
+          <h4>3. 선호 경로·교통수단 선택</h4>
+          <span class="diff-stars">●○○○○</span>
+        </div>
+        <p>공공 길찾기 API가 복수 경로 옵션을 반환하므로, 카드 UI로 노출하는 정도의 작업.</p>
+      </div>
+      <div class="diff-card mid">
+        <div class="diff-head">
+          <h4>4. 경로 안내</h4>
+          <span class="diff-stars">●●○○○</span>
+        </div>
+        <p>실시간 턴바이턴 안내까지 가면 복잡해지나, "현재 위치 기준 다음 행동" 수준으로 범위를 좁혀 구현한다.</p>
+      </div>
+      <div class="diff-card high">
+        <div class="diff-head">
+          <h4>5. 환승 구간 연결</h4>
+          <span class="diff-stars">●●●●○</span>
+        </div>
+        <p>도착 감지(geofencing) 자체는 단순하나, 외부 앱 화면 제어가 필요해 별도 환경 구성이 필요하다. 고정된 데모 기종·시나리오로 범위를 한정해 1~2주 내 시연 가능한 수준으로 좁혔다.</p>
+      </div>
+    </div>
+
+    <h3 class="sub">5단계 구현 방식 검토</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>방식</th><th>구현 방법</th><th>한계</th><th>채택 여부</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>딥링크 호출</td>
+            <td>특정 URL 스킴으로 외부 앱을 열어줌</td>
+            <td>앱을 여는 데서 끝남. 호출 결과를 돌려받을 수 없음</td>
+            <td><span class="badge badge-amber">보조 수단</span></td>
+          </tr>
+          <tr>
+            <td>화면 제어 자동화</td>
+            <td>화면을 인식해 직접 탭·입력까지 수행</td>
+            <td>고정된 데모 기종·OS 버전에서만 안정적으로 동작</td>
+            <td><span class="badge badge-teal">채택 (범위 한정)</span></td>
+          </tr>
+          <tr>
+            <td>정식 API 제휴</td>
+            <td>서비스사와 협의해 정식 연동</td>
+            <td>학생 프로젝트 범위를 넘어서는 별도 협의 필요</td>
+            <td><span class="badge badge-gray">범위 밖</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section id="s6">
+    <div class="section-number">Section 06</div>
+    <h2>차별점과 확장 가능성</h2>
+    <ul class="feature-list">
+      <li><div class="fi"></div><div><strong>단발성 호출이 아닌 다단계 에이전트 —</strong> 입력을 음성에 한정하지 않고, 핵심 차별점을 상태 관리 기반의 연속적 의사결정 지원에 둔다.</div></li>
+      <li><div class="fi"></div><div><strong>판단은 에이전트, 실행은 사용자 —</strong> 책임이 따르는 동작(결제·확정)은 항상 사용자가 직접 수행하도록 설계해, 신뢰 가능한 보조 구조를 갖춘다.</div></li>
+      <li><div class="fi"></div><div><strong>공공데이터 기반 —</strong> 버스·지하철 도착정보는 국가교통정보센터·지자체 공공 API로 확보 가능해, 외부 제휴 없이도 핵심 기능 시연이 가능하다.</div></li>
+      <li><div class="fi"></div><div><strong>후속 확장 경로 —</strong> 본 단계는 컨셉 프로토타입이며, 실제 서비스 연계나 민간 제휴는 공단·KT 차원의 후속 검토 사항으로 명확히 구분한다.</div></li>
+    </ul>
+  </section>
+
+  <!-- 7 -->
+  <section id="s7">
+    <div class="section-number">Section 07</div>
+    <h2>디자인 참고</h2>
+    <p>아래 레퍼런스(Sinport — Singapore Airport Navigation)에서 가져올 핵심 디자인 요소를 정리한다.
+
+    <div class="paper">
+      <div class="paper-num">[R1]</div>
+      <div class="paper-body">
+        <h4><a href="https://dribbble.com/shots/23877304-Sinport-mobile-app-UI-design-for-Singapore-Airport-navigation" target="_blank">Sinport — Mobile App UI Design for Singapore Airport Navigation ↗</a></h4>
+        <p class="paper-meta">Dribbble · 디자이너 포트폴리오</p>
+      </div>
+    </div>
+
+    <video class="ref-video" src="https://cdn.dribbble.com/userupload/13724941/file/original-a80544b612b2ae31637d2a6b46ff85fc.mp4" poster="https://cdn.dribbble.com/userupload/13724941/file/still-d6856df7ac0fefc6c8d4c43fe54264c6.png" autoplay loop muted playsinline preload="auto" controls></video>
+    <img data-v-e90badf3="" data-test="v-img" alt="" width="1600" height="1201" data-sizes="auto" data-aspectratio="1.3322231473771857" draggable="false" class="v-img content-block border-radius-8 lazyautosizes ls-is-cached lazyloaded" data-srcset="https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=320x240&amp;vertical=center 320w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=400x300&amp;vertical=center 400w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=640x480&amp;vertical=center 640w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=752x564&amp;vertical=center 752w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=1024x769&amp;vertical=center 1024w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=1200x901&amp;vertical=center 1200w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=1504x1129&amp;vertical=center 1504w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=2048x1537&amp;vertical=center 2048w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=323x242&amp;vertical=center 323w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=646x485&amp;vertical=center 646w" sizes="810px" srcset="https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=320x240&amp;vertical=center 320w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=400x300&amp;vertical=center 400w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=640x480&amp;vertical=center 640w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=752x564&amp;vertical=center 752w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=1024x769&amp;vertical=center 1024w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=1200x901&amp;vertical=center 1200w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=1504x1129&amp;vertical=center 1504w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=2048x1537&amp;vertical=center 2048w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=323x242&amp;vertical=center 323w, https://cdn.dribbble.com/userupload/13726462/file/original-01e878ebc0b577ad7f54d63f4e951712.png?resize=646x485&amp;vertical=center 646w">
+    <img data-v-e90badf3="" data-test="v-img" alt="" width="1600" height="1201" data-sizes="auto" data-aspectratio="1.3322231473771857" draggable="false" class="v-img content-block border-radius-8 lazyautosizes ls-is-cached lazyloaded" data-srcset="https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=320x240&amp;vertical=center 320w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=400x300&amp;vertical=center 400w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=640x480&amp;vertical=center 640w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=752x564&amp;vertical=center 752w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=1024x769&amp;vertical=center 1024w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=1200x901&amp;vertical=center 1200w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=1504x1129&amp;vertical=center 1504w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=2048x1537&amp;vertical=center 2048w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=323x242&amp;vertical=center 323w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=646x485&amp;vertical=center 646w" sizes="810px" srcset="https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=320x240&amp;vertical=center 320w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=400x300&amp;vertical=center 400w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=640x480&amp;vertical=center 640w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=752x564&amp;vertical=center 752w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=1024x769&amp;vertical=center 1024w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=1200x901&amp;vertical=center 1200w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=1504x1129&amp;vertical=center 1504w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=2048x1537&amp;vertical=center 2048w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=323x242&amp;vertical=center 323w, https://cdn.dribbble.com/userupload/13724937/file/original-de17ff517f97d27b43b2c258965f8440.png?resize=646x485&amp;vertical=center 646w">
+
+    <h3 class="sub">가져올 디자인 요소</h3>
+    <ul class="feature-list">
+      <li><div class="fi"></div><div><strong>큰 숫자형 단계 카드 —</strong> 게이트 번호, 남은 시간처럼 가장 중요한 정보 하나를 큰 숫자/큰 글자로 화면 상단에 고정 노출. 본 프로젝트에서는 "다음 정류장까지 N분", "환승까지 N분" 같은 값을 동일한 위치·크기로 고정해, 고령자가 화면을 스캔하지 않고도 한눈에 핵심만 확인하게 한다.</div></li>
+      <li><div class="fi"></div><div><strong>경로를 따라가는 세로형 타임라인 —</strong> 출발지부터 목적지까지의 구간을 위에서 아래로 흐르는 카드 스택으로 표현하고, 현재 위치에 해당하는 카드만 강조색으로 부각. 4단계(경로 안내)·5단계(환승 연결) 화면에 적용해 "지금 어디까지 왔는지"를 텍스트 설명 없이도 인지하게 한다.</div></li>
+      <li><div class="fi"></div><div><strong>한 화면 = 한 결정 —</strong> 레퍼런스는 화면마다 사용자가 내려야 할 결정을 하나로 제한하고, 나머지 정보는 보조적으로 흐리게 배치한다. 본 프로젝트의 3단계(경로·교통수단 선택)에서 후보를 2~3개 카드로만 제시하고, 선택 즉시 다음 화면으로 전환하는 구조에 그대로 적용한다.</div></li>
+      <li><div class="fi"></div><div><strong>방향성 아이콘 + 최소 텍스트 —</strong> 화살표·도착지 핀 같은 단순 픽토그램을 본문 텍스트보다 크게 배치해, 문해력이나 시력에 관계없이 진행 방향을 인지하게 한다. 2단계(지도 경로 표시)에서 경로선과 함께 적용한다.</div></li>
+      <li><div class="fi"></div><div><strong>고대비 색상 + 큰 터치 영역 —</strong> 레퍼런스의 버튼·카드는 터치 영역이 넓고 배경과의 명도 대비가 뚜렷하다. 고령자의 터치 정확도·시인성을 고려해, 본 프로젝트 전체 화면의 버튼 최소 높이와 텍스트-배경 대비비를 이 기준에 맞춰 통일한다.</div></li>
+    </ul>
+
+    <div class="callout teal">
+      <p><strong>적용 우선순위 —</strong> "큰 숫자형 단계 카드"와 "한 화면 = 한 결정" 두 요소가 고령자 사용성에 가장 직접적으로 기여한다. 프로토타입 제작 시간이 부족할 경우 이 두 가지를 먼저 구현하고, 세로형 타임라인과 아이콘 디테일은 이후 다듬는다.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  2026 KT 디지털인재장학생 AI기반 사회문제해결 프로젝트 &nbsp;·&nbsp; 대전·충청 팀
+</footer>
+
+</body>
+</html>

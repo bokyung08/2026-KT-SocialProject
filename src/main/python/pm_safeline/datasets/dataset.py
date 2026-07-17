@@ -167,3 +167,99 @@ def default_transform(train: bool = True):
         transforms.ToTensor(),
         norm,
     ])
+
+
+# --------------------------------------------------------------------------- #
+# 데이터 분할 (train/valid, k-fold)
+#
+# teacher(ViT) 학습용 분할. 두 가지를 반드시 지킨다(§4.5, 대화 결정):
+#   1) 지점 단위 group 유지 — 한 지점(point_id)에서 여러 heading 으로 찍은 이미지들이
+#      train 과 valid 에 나뉘면 같은 장소가 양쪽에 새서(leakage) 성능이 부풀려진다.
+#   2) 라벨 stratify — 사고(1)/대조(0) 비율을 각 분할에 동일하게.
+# sklearn StratifiedGroupKFold 가 이 둘을 한 번에 처리한다.
+#
+# 데이터가 적으므로(§4.5-1) 별도 test 분할은 두지 않는다. teacher 신뢰도 추정이
+# 필요하면 kfold_indices() 로 교차검증한다. 분할 로직은 torch 불필요(sklearn만).
+# --------------------------------------------------------------------------- #
+
+def _frame_of(data):
+    """dataset / DataFrame / manifest 경로 어느 것이 와도 manifest DataFrame 으로 정규화."""
+    import pandas as pd
+
+    if hasattr(data, "frame"):          # PMRoadviewDataset
+        return data.frame
+    if isinstance(data, pd.DataFrame):
+        return data
+    return pd.read_csv(data)            # 경로(str/Path)
+
+
+def split_indices(data, valid_frac: float = 0.2, seed: int = 42,
+                  label_col: str = "label", group_col: str = "point_id"):
+    """train/valid 인덱스를 (train_idx, valid_idx) 로 반환.
+
+    같은 `point_id` 는 한쪽에만(누수 방지), 라벨 비율 유지(stratify).
+    단일 클래스면 stratify 불가 → 그룹 단위 무작위 분할로 폴백.
+    """
+    import numpy as np
+
+    frame = _frame_of(data)
+    y = frame[label_col].to_numpy()
+    groups = frame[group_col].to_numpy()
+    idx = np.arange(len(frame))
+
+    if len(np.unique(y)) < 2:
+        from sklearn.model_selection import GroupShuffleSplit
+        splitter = GroupShuffleSplit(n_splits=1, test_size=valid_frac, random_state=seed)
+        tr, va = next(splitter.split(idx, y, groups))
+    else:
+        from sklearn.model_selection import StratifiedGroupKFold
+        n_splits = max(2, round(1.0 / valid_frac))
+        sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        tr, va = next(sgkf.split(idx, y, groups))
+    return tr.tolist(), va.tolist()
+
+
+def kfold_indices(data, n_splits: int = 5, seed: int = 42,
+                  label_col: str = "label", group_col: str = "point_id"):
+    """StratifiedGroupKFold 로 [(train_idx, valid_idx), ...] (n_splits 개) 반환.
+
+    적은 데이터에서 teacher 신뢰도를 추정할 때 고정 test 대신 사용(§4.5-1).
+    """
+    import numpy as np
+    from sklearn.model_selection import StratifiedGroupKFold
+
+    frame = _frame_of(data)
+    y = frame[label_col].to_numpy()
+    groups = frame[group_col].to_numpy()
+    idx = np.arange(len(frame))
+    sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    return [(tr.tolist(), va.tolist()) for tr, va in sgkf.split(idx, y, groups)]
+
+
+def make_train_valid(
+    root: str | Path | None = None,
+    *,
+    valid_frac: float = 0.2,
+    seed: int = 42,
+    cfg: Config = DEFAULT_CONFIG,
+    train_transform: Callable | None = None,
+    valid_transform: Callable | None = None,
+    target_key: str = "label",
+    return_meta: bool = False,
+):
+    """학습에 바로 쓸 (train_subset, valid_subset) 반환 (torch 필요).
+
+    train/valid 는 서로 다른 transform 을 갖는다(train=증강, valid=결정적). 내부적으로
+    같은 manifest 로 두 Dataset 을 만들고 [split_indices] 로 나눈 뒤 Subset 으로 감싼다.
+    """
+    _require_torch()
+    from torch.utils.data import Subset
+
+    tr_t = train_transform if train_transform is not None else default_transform(train=True)
+    va_t = valid_transform if valid_transform is not None else default_transform(train=False)
+
+    train_ds = PMRoadviewDataset(root, transform=tr_t, cfg=cfg, target_key=target_key, return_meta=return_meta)
+    valid_ds = PMRoadviewDataset(root, transform=va_t, cfg=cfg, target_key=target_key, return_meta=return_meta)
+
+    train_idx, valid_idx = split_indices(train_ds.frame, valid_frac=valid_frac, seed=seed)
+    return Subset(train_ds, train_idx), Subset(valid_ds, valid_idx)

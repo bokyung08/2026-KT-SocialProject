@@ -84,6 +84,22 @@ folder_ds = image_folder()                                        # 순수 Image
 - torchvision 관례 준수: `(sample, target)` 반환, `transform`/`target_transform`, `.targets`, `.classes`.
 - 클래스 불균형(§4.5-1) 대응 `ds.class_weights()` 제공.
 
+### train/valid 분할 (지점 누수 방지 + 라벨 stratify)
+
+```python
+from pm_safeline.datasets.dataset import make_train_valid, split_indices, kfold_indices
+
+# 학습용 (train=증강, valid=결정적 transform 자동 적용)
+train_ds, valid_ds = make_train_valid(valid_frac=0.2, seed=42)
+
+# 인덱스만 필요하면 (torch 불필요, sklearn만)
+train_idx, valid_idx = split_indices(manifest_or_dataset, valid_frac=0.2)
+folds = kfold_indices(manifest_or_dataset, n_splits=5)   # 적은 데이터 신뢰도 추정용
+```
+
+- **같은 `point_id`(여러 heading)는 한쪽에만** 들어가 누수를 막고, 사고/대조 비율을 유지(StratifiedGroupKFold).
+- 데이터가 적어 **별도 test 분할은 두지 않음** — 필요 시 `kfold_indices`로 교차검증(대화 결정, §4.5-1).
+
 ## 환경 주의 (메모리 pm-pilot-study 근거)
 
 - venv는 **Python 3.14** — `torch` 휠이 아직 불확실. 수집(1~4단계)은 torch 없이 동작하도록 설계됨.

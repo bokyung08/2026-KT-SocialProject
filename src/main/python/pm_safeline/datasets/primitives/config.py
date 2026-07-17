@@ -11,8 +11,9 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# 대전 중심부 bbox (W, S, E, N) — 파일럿과 동일(충남대/KAIST/한밭대/배재대/우송대/둔산)
-DAEJEON_BBOX: tuple[float, float, float, float] = (127.30, 36.31, 127.43, 36.39)
+# 대전시 전역 범위 (W, S, E, N) — 사고 좌표 '유효성 필터'용(대전 밖 좌표=데이터 오류 제외).
+# 사고 지점을 임의로 자르는 게 아니라, 실제 작업 영역은 사고 좌표 분포에서 도출된다.
+DAEJEON_BBOX: tuple[float, float, float, float] = (127.24, 36.17, 127.57, 36.51)
 
 # 미터 단위 연산용 투영 (UTM 52N)
 METRIC_CRS = "EPSG:32652"

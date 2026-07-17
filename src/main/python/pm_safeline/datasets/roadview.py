@@ -154,6 +154,14 @@ def build_roadview_dataset(
     accidents = load_accidents(source, cfg, pm_only=pm_only)
     print(f"[pipeline]   {len(accidents)}건 · severity={accidents['severity'].value_counts().to_dict()}")
 
+    # OSM·negative 영역은 하드코딩 bbox 가 아니라 '사고 좌표들의 실제 범위(+여유)'로 잡는다.
+    import dataclasses
+    minx, miny, maxx, maxy = accidents.total_bounds        # (W, S, E, N)
+    margin = 0.01  # 약 1km — negative 를 사고 주변에서 뽑을 여지
+    region = (minx - margin, miny - margin, maxx + margin, maxy + margin)
+    cfg = dataclasses.replace(cfg, bbox=region)
+    print(f"[pipeline]   작업 영역=사고 범위+여유 {tuple(round(v, 3) for v in region)}")
+
     print("[pipeline] 2/5 OSM 도로망 로드")
     edges = geo.load_drive_edges(cfg)
 

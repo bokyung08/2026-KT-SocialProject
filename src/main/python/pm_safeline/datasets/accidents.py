@@ -222,14 +222,8 @@ def _koroad_fetch(
     if not rows_out:
         raise ValueError("KoROAD 응답에서 다발지역을 하나도 받지 못했습니다(연도/코드/인증키 확인).")
 
-    df = pd.DataFrame(rows_out)
-    # bbox 클리핑(대전 중심부)
-    w, s, e, n = cfg.bbox
-    in_box = df["lat"].between(s, n) & df["lon"].between(w, e)
-    dropped = int((~in_box).sum())
-    if dropped:
-        print(f"[koroad] bbox 밖 {dropped}개 제외")
-    df = df[in_box].reset_index(drop=True)
+    df = pd.DataFrame(rows_out).reset_index(drop=True)
+    # 사고 좌표는 데이터가 정한다 — bbox 로 임의로 자르지 않는다(KoROAD 가 준 지점 전부 사용).
     df["accident_id"] = range(1, len(df) + 1)
 
     return gpd.GeoDataFrame(
@@ -354,15 +348,7 @@ def _taas_load(cfg: Config = DEFAULT_CONFIG, *, pm_only: bool = True) -> "gpd.Ge
 
     merged = pd.concat(frames, ignore_index=True)
     merged = merged.dropna(subset=["lat", "lon"]).reset_index(drop=True)
-
-    # bbox 클리핑
-    w, s, e, n = cfg.bbox
-    in_box = merged["lat"].between(s, n) & merged["lon"].between(w, e)
-    dropped = int((~in_box).sum())
-    if dropped:
-        print(f"[taas] bbox 밖 {dropped}건 제외")
-    merged = merged[in_box].reset_index(drop=True)
-
+    # 사고 좌표는 데이터가 정한다 — bbox 로 자르지 않는다(좌표 있는 사고 전부 사용).
     merged["accident_id"] = np.arange(1, len(merged) + 1)
     gdf = gpd.GeoDataFrame(
         merged,
@@ -435,7 +421,22 @@ def load_accidents(
         gdf = _taas_load(cfg, pm_only=pm_only)
     else:
         raise ValueError(f"알 수 없는 source: {source} (koroad|taas)")
+    gdf = _drop_out_of_region(gdf, cfg)
     return _validate(gdf)
+
+
+def _drop_out_of_region(gdf, cfg: Config):
+    """대전시 범위(cfg.bbox) 밖 좌표 = 데이터 입력 오류로 보고 제외.
+
+    사고 지점을 임의로 자르는 게 아니라, '대전 데이터셋인데 좌표가 서울' 같은 명백한
+    좌표 오류만 걸러낸다. (파일럿 중심부 crop 아님 — cfg.bbox 는 대전 전역 범위)
+    """
+    w, s, e, n = cfg.bbox
+    inb = gdf["lat"].between(s, n) & gdf["lon"].between(w, e)
+    dropped = int((~inb).sum())
+    if dropped:
+        print(f"[accidents] 대전 범위 밖 좌표(오류 의심) {dropped}건 제외")
+    return gdf[inb].reset_index(drop=True)
 
 
 # --------------------------------------------------------------------------- #

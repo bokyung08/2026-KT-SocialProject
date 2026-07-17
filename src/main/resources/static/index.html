@@ -535,7 +535,10 @@
 
   var ROUTE_COLORS = ["#E8453C", "#F5A623", "#2B6FE3", "#5F9450", "#8B5CF6"];
 
-  var map = L.map("map", { zoomControl: true }).setView([36.35, 127.38], 13);
+  // 기본 중심(대전)·확대. 현재 위치를 얻으면 아래에서 그 지점으로 이동한다.
+  var DEFAULT_CENTER = [36.35, 127.38];
+  var DEFAULT_ZOOM = 16;
+  var map = L.map("map", { zoomControl: true }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19
@@ -560,6 +563,26 @@
     iconSize: [16, 16],
     iconAnchor: [8, 16]
   });
+
+  // 현재 위치 표시(파란 점) + 로드 시 그 지점으로 이동. 데모 모드에서는 경로에 맞추므로 생략.
+  var meMarker = null;
+  function showCurrentLocation(lat, lon, recenter) {
+    var latlng = L.latLng(lat, lon);
+    if (meMarker) map.removeLayer(meMarker);
+    meMarker = L.circleMarker(latlng, {
+      radius: 7, color: "#fff", weight: 2, fillColor: "#2B6FE3", fillOpacity: 1
+    }).addTo(map).bindTooltip("현재 위치");
+    if (recenter) map.setView(latlng, DEFAULT_ZOOM);
+  }
+  (function initCurrentLocation() {
+    var isDemo = new URLSearchParams(location.search).get("demo");
+    if (isDemo || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      function (pos) { showCurrentLocation(pos.coords.latitude, pos.coords.longitude, true); },
+      function () { /* 권한 거부/실패 시 기본 대전 중심 유지 */ },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  })();
 
   function fmtCoord(ll) {
     return ll.lat.toFixed(5) + ", " + ll.lng.toFixed(5);

@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PM 세이프라인</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root {
+    --brand: #E8453C;
+    --brand-strong: #D7263D;
+    --brand-tint: #FDEDEC;
+    --ink: #1A1A1E;
+    --ink-2: #5C5C66;
+    --muted: #A0A0AA;
+    --line: #E8E8EC;
+    --surface: #FFFFFF;
+    --bg: #F0F0F3;
+    --amber: #F5A623;
+    --blue: #2B6FE3;
+    --safe-bg: #EEF0EA;
+    --safe: #5F9450;
+    --font: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+  }
+
+  /* ---- mobile app shell ---- */
+  #app {
+    width: 100%;
+    max-width: 420px;
+    min-height: 100vh;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 40px rgba(0,0,0,0.06);
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 12px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  header h1 {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0;
+    color: var(--ink);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  .badge .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+
+  .badge.ok .dot { background: #4CAF6D; box-shadow: 0 0 6px #4CAF6D; }
+  .badge.ok { color: #2E8B4F; }
+  .badge.bad .dot { background: var(--brand-strong); box-shadow: 0 0 6px var(--brand-strong); }
+  .badge.bad { color: var(--brand-strong); }
+  .badge.pending .dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+  main {
+    padding: 4px 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  #banner {
+    background: var(--brand-tint);
+    border: 1px solid #f3c6c2;
+    color: var(--brand-strong);
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    display: none;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  #banner.show { display: flex; }
+
+  #banner button {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--brand-strong);
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+  }
+
+  /* ---- primary CTA ---- */
+  #openPlanBtn {
+    width: 100%;
+    padding: 15px;
+    background: var(--brand);
+    border: none;
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .15s, transform .1s, box-shadow .15s;
+    box-shadow: 0 4px 16px rgba(232,69,60,0.28);
+  }
+  #openPlanBtn:hover { background: var(--brand-strong); transform: translateY(-1px); }
+  #openPlanBtn.active { background: var(--brand-strong); }
+
+  section.block h2.section-label {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0 0 10px 2px;
+  }
+
+  /* ---- planning panel (collapsible) ---- */
+  #planPanel {
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  }
+  #planPanel.open { display: flex; }
+
+  .plan-hint {
+    font-size: 12px;
+    color: var(--ink-2);
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px 12px;
+    line-height: 1.5;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+
+  .card h3 {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-2);
+    margin: 0 0 10px 0;
+    font-weight: 700;
+  }
+
+  .coord-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .coord-row:last-child { border-bottom: none; }
+
+  .coord-row .label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-2);
+  }
+
+  .marker-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .marker-dot.from { background: var(--safe); }
+  .marker-dot.to { background: var(--brand); }
+
+  .coord-val { font-variant-numeric: tabular-nums; color: var(--ink); font-size: 12.5px; }
+
+  button.reset-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-2);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    transition: all .15s;
+  }
+  button.reset-btn:hover { border-color: var(--brand); color: var(--brand); }
+
+  .slider-row {
+    margin-bottom: 12px;
+  }
+  .slider-row:last-child { margin-bottom: 0; }
+
+  .slider-row .top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    margin-bottom: 4px;
+  }
+  .slider-row .top .name { color: var(--ink); font-weight: 600; }
+  .slider-row .top .val { color: var(--brand); font-variant-numeric: tabular-nums; }
+  .slider-row .hint { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--brand);
+    height: 4px;
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-2);
+  }
+  .checkbox-row input { accent-color: var(--brand); width: 15px; height: 15px; }
+
+  .alt-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    font-size: 12.5px;
+  }
+  .alt-row input[type="number"] {
+    width: 60px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 13px;
+  }
+
+  fieldset.disabled { opacity: 0.4; pointer-events: none; }
+
+  #searchBtn {
+    width: 100%;
+    padding: 13px;
+    background: var(--brand);
+    border: none;
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .15s, transform .1s, box-shadow .15s;
+    box-shadow: 0 2px 12px rgba(232,69,60,0.25);
+  }
+  #searchBtn:hover:not(:disabled) { background: var(--brand-strong); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(215,38,61,0.3); }
+  #searchBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .spinner {
+    display: inline-block;
+    width: 13px; height: 13px;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 6px;
+    vertical-align: -2px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #results {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .result-item {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    position: relative;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .result-item:hover, .result-item.active {
+    border-color: var(--brand);
+    background: var(--brand-tint);
+  }
+  .result-item .rt-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .rt-idx {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .rt-title {
+    font-weight: 700;
+    font-size: 13.5px;
+  }
+  .rt-safety {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .rt-safety.good { background: var(--safe-bg); color: var(--safe); }
+  .rt-safety.mid { background: rgba(245,166,35,0.15); color: var(--amber); }
+  .rt-safety.bad { background: rgba(232,69,60,0.12); color: var(--brand-strong); }
+
+  .rt-sub {
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .rt-sub b.score { color: var(--brand); }
+
+  .rt-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    font-size: 11.5px;
+    color: var(--ink-2);
+    margin-top: 8px;
+  }
+  .rt-grid b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+    padding: 24px 8px;
+    line-height: 1.6;
+  }
+
+  /* ---- map card ---- */
+  #mapCard {
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    background: var(--surface);
+  }
+  #map {
+    height: 300px;
+    background: #dfe3e0;
+    position: relative;
+  }
+
+  #toast-stack {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 380px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    padding: 0 12px;
+  }
+
+  .toast {
+    background: var(--ink);
+    border: 1px solid #333;
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    animation: slideIn 0.25s ease-out;
+  }
+
+  @keyframes slideIn {
+    from { transform: translateY(8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>PM 세이프라인</h1>
+    <div id="healthBadge" class="badge pending"><span class="dot"></span><span class="txt">확인 중…</span></div>
+  </header>
+
+  <main>
+    <div id="banner">
+      <div>라우팅 엔진 비활성 — 서버에 <b>PM_OSM_FILE</b> 설정 필요. <code>/route</code> 는 503.</div>
+      <button id="bannerClose" title="닫기">×</button>
+    </div>
+
+    <button id="openPlanBtn">+ 새 경로 탐색</button>
+
+    <div id="planPanel">
+      <div class="plan-hint">아래 지도를 클릭해 <b>출발지</b>를 지정하고, 다시 클릭해 <b>목적지</b>를 지정하세요.</div>
+
+      <div class="card">
+        <h3>지점 선택</h3>
+        <div class="coord-row">
+          <span class="label"><span class="marker-dot from"></span>출발지</span>
+          <span class="coord-val" id="fromCoord">지도를 클릭하세요</span>
+        </div>
+        <div class="coord-row">
+          <span class="label"><span class="marker-dot to"></span>목적지</span>
+          <span class="coord-val" id="toCoord">-</span>
+        </div>
+        <button class="reset-btn" id="resetBtn">초기화</button>
+      </div>
+
+      <div class="card">
+        <h3>가중치 설정</h3>
+        <fieldset id="weightFields" style="border:none; padding:0; margin:0;">
+          <div class="slider-row">
+            <div class="top"><span class="name">거리 가중치 (w1)</span><span class="val" id="v-distanceWeight">1.0</span></div>
+            <input type="range" id="distanceWeight" min="0" max="10" step="0.1" value="1.0" />
+            <div class="hint">클수록 짧은 경로를 선호합니다</div>
+          </div>
+          <div class="slider-row">
+            <div class="top"><span class="name">간선도로 회피 (w2)</span><span class="val" id="v-arterialPenalty">3.0</span></div>
+            <input type="range" id="arterialPenalty" min="0" max="10" step="0.1" value="3.0" />
+            <div class="hint">차도·간선도로를 얼마나 피할지</div>
+          </div>
+          <div class="slider-row">
+            <div class="top"><span class="name">도로유형 전환 페널티 (w3)</span><span class="val" id="v-transitionPenalty">2.0</span></div>
+            <input type="range" id="transitionPenalty" min="0" max="10" step="0.1" value="2.0" />
+            <div class="hint">자전거도로 단절에 대한 페널티</div>
+          </div>
+          <div class="slider-row">
+            <div class="top"><span class="name">교차로/횡단 페널티 (w4)</span><span class="val" id="v-crossingPenalty">1.5</span></div>
+            <input type="range" id="crossingPenalty" min="0" max="10" step="0.1" value="1.5" />
+            <div class="hint">교차로 및 횡단보도 통과 페널티</div>
+          </div>
+          <div class="slider-row">
+            <div class="top"><span class="name">버스노선 겹침 페널티 (w5)</span><span class="val" id="v-busOverlapPenalty">1.0</span></div>
+            <input type="range" id="busOverlapPenalty" min="0" max="10" step="0.1" value="1.0" />
+            <div class="hint">버스 전용/공용 구간 회피 정도</div>
+          </div>
+        </fieldset>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="useDefaultWeights" />
+          <label for="useDefaultWeights">서버 기본 가중치 사용</label>
+        </div>
+
+        <div class="alt-row">
+          <span style="color:var(--muted)">후보 경로 수</span>
+          <input type="number" id="alternatives" min="1" max="5" value="3" />
+        </div>
+      </div>
+
+      <button id="searchBtn">경로 탐색</button>
+    </div>
+
+    <section class="block">
+      <h2 class="section-label">최근 경로</h2>
+      <div id="results">
+        <div class="empty-state" id="resultsEmpty">출발지와 목적지를 지정한 뒤<br/>"경로 탐색"을 눌러주세요.</div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2 class="section-label">내 위치 지도</h2>
+      <div id="mapCard">
+        <div id="map"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast-stack"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var ROUTE_COLORS = ["#E8453C", "#F5A623", "#2B6FE3", "#5F9450", "#8B5CF6"];
+
+  var map = L.map("map", { zoomControl: true }).setView([36.35, 127.38], 13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  var fromLatLng = null;
+  var toLatLng = null;
+  var fromMarker = null;
+  var toMarker = null;
+  var routeLayers = [];
+  var lastRoutes = [];
+
+  var greenIcon = L.divIcon({
+    className: "",
+    html: '<div style="width:16px;height:16px;border-radius:50% 50% 50% 0;background:#5F9450;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 16]
+  });
+  var redIcon = L.divIcon({
+    className: "",
+    html: '<div style="width:16px;height:16px;border-radius:50% 50% 50% 0;background:#E8453C;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 16]
+  });
+
+  function fmtCoord(ll) {
+    return ll.lat.toFixed(5) + ", " + ll.lng.toFixed(5);
+  }
+
+  function updateCoordPanel() {
+    document.getElementById("fromCoord").textContent = fromLatLng ? fmtCoord(fromLatLng) : "지도를 클릭하세요";
+    document.getElementById("toCoord").textContent = toLatLng ? fmtCoord(toLatLng) : "-";
+  }
+
+  function clearRouteLayers() {
+    routeLayers.forEach(function (l) { map.removeLayer(l); });
+    routeLayers = [];
+  }
+
+  function resetAll() {
+    fromLatLng = null;
+    toLatLng = null;
+    if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
+    if (toMarker) { map.removeLayer(toMarker); toMarker = null; }
+    clearRouteLayers();
+    lastRoutes = [];
+    renderResults([]);
+    updateCoordPanel();
+  }
+
+  map.on("click", function (e) {
+    if (!fromLatLng || (fromLatLng && toLatLng)) {
+      // start fresh
+      if (fromMarker) map.removeLayer(fromMarker);
+      if (toMarker) { map.removeLayer(toMarker); toMarker = null; }
+      clearRouteLayers();
+      lastRoutes = [];
+      renderResults([]);
+      fromLatLng = e.latlng;
+      toLatLng = null;
+      fromMarker = L.marker(fromLatLng, { icon: greenIcon }).addTo(map);
+    } else {
+      toLatLng = e.latlng;
+      toMarker = L.marker(toLatLng, { icon: redIcon }).addTo(map);
+    }
+    updateCoordPanel();
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", resetAll);
+
+  // ---- primary CTA toggles plan panel ----
+  var openPlanBtn = document.getElementById("openPlanBtn");
+  var planPanel = document.getElementById("planPanel");
+  openPlanBtn.addEventListener("click", function () {
+    var isOpen = planPanel.classList.toggle("open");
+    openPlanBtn.classList.toggle("active", isOpen);
+    openPlanBtn.textContent = isOpen ? "− 경로 탐색 닫기" : "+ 새 경로 탐색";
+    if (isOpen) {
+      setTimeout(function () { map.invalidateSize(); }, 50);
+    }
+  });
+
+  // ---- sliders ----
+  var sliderIds = ["distanceWeight", "arterialPenalty", "transitionPenalty", "crossingPenalty", "busOverlapPenalty"];
+  sliderIds.forEach(function (id) {
+    var el = document.getElementById(id);
+    var label = document.getElementById("v-" + id);
+    el.addEventListener("input", function () {
+      label.textContent = parseFloat(el.value).toFixed(1);
+    });
+  });
+
+  var useDefaultWeights = document.getElementById("useDefaultWeights");
+  var weightFields = document.getElementById("weightFields");
+  useDefaultWeights.addEventListener("change", function () {
+    weightFields.classList.toggle("disabled", useDefaultWeights.checked);
+  });
+
+  function currentWeights() {
+    if (useDefaultWeights.checked) return null;
+    var w = {};
+    sliderIds.forEach(function (id) {
+      w[id] = parseFloat(document.getElementById(id).value);
+    });
+    return w;
+  }
+
+  // ---- toast / banner ----
+  function showToast(msg) {
+    var stack = document.getElementById("toast-stack");
+    var t = document.createElement("div");
+    t.className = "toast";
+    t.style.pointerEvents = "auto";
+    t.textContent = msg;
+    stack.appendChild(t);
+    setTimeout(function () {
+      t.style.transition = "opacity .3s";
+      t.style.opacity = "0";
+      setTimeout(function () { t.remove(); }, 300);
+    }, 6000);
+  }
+
+  document.getElementById("bannerClose").addEventListener("click", function () {
+    document.getElementById("banner").classList.remove("show");
+  });
+
+  function setHealthBadge(state, text) {
+    var badge = document.getElementById("healthBadge");
+    badge.className = "badge " + state;
+    badge.querySelector(".txt").textContent = text;
+  }
+
+  function checkHealth() {
+    fetch("/health").then(function (res) { return res.json(); }).then(function (data) {
+      if (data && data.engine) {
+        setHealthBadge("ok", "활성");
+      } else {
+        setHealthBadge("bad", "비활성");
+        document.getElementById("banner").classList.add("show");
+      }
+    }).catch(function () {
+      setHealthBadge("bad", "응답 없음");
+    });
+  }
+  checkHealth();
+
+  // ---- search ----
+  var searchBtn = document.getElementById("searchBtn");
+  searchBtn.addEventListener("click", function () {
+    if (!fromLatLng || !toLatLng) {
+      showToast("먼저 지도에서 출발지와 목적지를 클릭해 지정해주세요.");
+      return;
+    }
+
+    var body = {
+      fromLat: fromLatLng.lat,
+      fromLon: fromLatLng.lng,
+      toLat: toLatLng.lat,
+      toLon: toLatLng.lng,
+      alternatives: Math.max(1, Math.min(5, parseInt(document.getElementById("alternatives").value, 10) || 3))
+    };
+    var w = currentWeights();
+    if (w) body.weights = w;
+
+    searchBtn.disabled = true;
+    var originalHtml = searchBtn.innerHTML;
+    searchBtn.innerHTML = '<span class="spinner"></span>탐색 중…';
+
+    fetch("/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+    }).then(function (result) {
+      if (!result.ok) {
+        var err = result.data || {};
+        showToast("경로 탐색 실패 (" + result.status + "): " + (err.error || "unknown") + (err.detail ? " — " + err.detail : ""));
+        return;
+      }
+      var routes = (result.data && result.data.routes) || [];
+      if (!routes.length) {
+        showToast("탐색된 경로가 없습니다.");
+        renderResults([]);
+        return;
+      }
+      lastRoutes = routes;
+      drawRoutes(routes);
+      renderResults(routes);
+    }).catch(function (e) {
+      showToast("네트워크 오류: " + e.message);
+    }).finally(function () {
+      searchBtn.disabled = false;
+      searchBtn.innerHTML = originalHtml;
+    });
+  });
+
+  function drawRoutes(routes) {
+    clearRouteLayers();
+    var bestBounds = null;
+    routes.forEach(function (route, idx) {
+      var latlngs = (route.geometry || []).map(function (pt) { return [pt[1], pt[0]]; });
+      var color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+      var isBest = idx === 0;
+      var line = L.polyline(latlngs, {
+        color: color,
+        weight: isBest ? 6 : 3.5,
+        opacity: isBest ? 0.95 : 0.55,
+        dashArray: isBest ? null : "6 6"
+      }).addTo(map);
+      line.on("click", function () { highlightRoute(idx); });
+      line.on("mouseover", function () { line.setStyle({ opacity: 1 }); });
+      line.on("mouseout", function () { line.setStyle({ opacity: isBest ? 0.95 : 0.55 }); });
+      routeLayers.push(line);
+      if (isBest && latlngs.length) bestBounds = line.getBounds();
+    });
+    if (bestBounds) map.fitBounds(bestBounds, { padding: [40, 40] });
+  }
+
+  function highlightRoute(idx) {
+    routeLayers.forEach(function (l, i) {
+      l.setStyle({ weight: i === idx ? 7 : 3, opacity: i === idx ? 1 : 0.35 });
+      if (i === idx) l.bringToFront();
+    });
+    document.querySelectorAll(".result-item").forEach(function (el, i) {
+      el.classList.toggle("active", i === idx);
+    });
+  }
+
+  function safetyClass(score) {
+    if (score >= 70) return "good";
+    if (score >= 40) return "mid";
+    return "bad";
+  }
+
+  function renderResults(routes) {
+    var container = document.getElementById("results");
+    container.innerHTML = "";
+    if (!routes.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.id = "resultsEmpty";
+      empty.innerHTML = "출발지와 목적지를 지정한 뒤<br/>\"경로 탐색\"을 눌러주세요.";
+      container.appendChild(empty);
+      return;
+    }
+    routes.forEach(function (route, idx) {
+      var color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+      var km = (route.distanceMeters / 1000).toFixed(1);
+      var minutes = Math.round(route.durationMillis / 60000);
+      var safety = typeof route.safetyScore === "number" ? route.safetyScore : 0;
+      var sClass = safetyClass(safety);
+      var bikeRatio = route.metrics && typeof route.metrics.bikeInfraRatio === "number"
+        ? Math.round(route.metrics.bikeInfraRatio * 100) + "%" : "-";
+      var transitions = route.metrics && typeof route.metrics.transitionCount === "number"
+        ? route.metrics.transitionCount : "-";
+
+      var item = document.createElement("div");
+      item.className = "result-item";
+      item.innerHTML =
+        '<div class="rt-head">' +
+          '<span class="rt-idx" style="background:' + color + '">' + (idx + 1) + '</span>' +
+          '<span class="rt-title">경로 ' + (idx + 1) + (idx === 0 ? ' (최적)' : '') + '</span>' +
+          '<span class="rt-safety ' + sClass + '">안전도 ' + safety.toFixed(0) + '</span>' +
+        '</div>' +
+        '<div class="rt-sub">점수 <b class="score">' + safety.toFixed(0) + '</b> · ' + km + 'km · ' + minutes + '분</div>' +
+        '<div class="rt-grid">' +
+          '<span>자전거도로 비율 <b>' + bikeRatio + '</b></span>' +
+          '<span>전환 횟수 <b>' + transitions + '</b></span>' +
+        '</div>';
+      item.addEventListener("mouseenter", function () { highlightRoute(idx); });
+      item.addEventListener("click", function () { highlightRoute(idx); });
+      container.appendChild(item);
+    });
+    highlightRoute(0);
+  }
+
+  // 데모 딥링크: ?demo=1 이면 샘플 경로(충남대 → 대전시청)를 자동 지정·탐색.
+  (function () {
+    var p = new URLSearchParams(location.search);
+    if (!p.get("demo")) return;
+    fromLatLng = L.latLng(36.3664, 127.3447);
+    toLatLng = L.latLng(36.3504, 127.3845);
+    if (fromMarker) map.removeLayer(fromMarker);
+    if (toMarker) map.removeLayer(toMarker);
+    fromMarker = L.marker(fromLatLng, { icon: greenIcon }).addTo(map);
+    toMarker = L.marker(toLatLng, { icon: redIcon }).addTo(map);
+    updateCoordPanel();
+    openPlanBtn.click();
+    setTimeout(function () { searchBtn.click(); }, 500);
+  })();
+})();
+</script>
+</body>
+</html>

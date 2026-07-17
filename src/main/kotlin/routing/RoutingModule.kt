@@ -2,6 +2,7 @@ package kt.dinjae.pm_safeline.routing
 
 import io.ktor.server.config.ApplicationConfig
 import io.ktor.server.config.tryGetString
+import kt.dinjae.pm_safeline.Dotenv
 import org.slf4j.LoggerFactory
 import java.io.File
 
@@ -23,7 +24,11 @@ class RoutingModule private constructor(
         private val log = LoggerFactory.getLogger(RoutingModule::class.java)
 
         fun from(config: ApplicationConfig): RoutingModule {
-            val osmFile = config.tryGetString("routing.osmFile")
+            // 우선순위: application.yaml(${?ENV}) → .env/시스템 프로퍼티/환경변수(Dotenv).
+            fun resolve(key: String, env: String): String? =
+                config.tryGetString(key)?.takeIf { it.isNotBlank() } ?: Dotenv.get(env)
+
+            val osmFile = resolve("routing.osmFile", "PM_OSM_FILE")
             val weights = PmCostWeights.SAFE_DEFAULT
 
             if (osmFile.isNullOrBlank() || !File(osmFile).exists()) {
@@ -33,10 +38,10 @@ class RoutingModule private constructor(
 
             val cfg = RoutingConfig(
                 osmFile = osmFile,
-                graphCache = config.tryGetString("routing.graphCache") ?: "graph-cache",
-                profile = config.tryGetString("routing.profile") ?: "pm_bike",
-                turnCosts = config.tryGetString("routing.turnCosts")?.toBoolean() ?: true,
-                maxAlternatives = config.tryGetString("routing.maxAlternatives")?.toInt() ?: 3,
+                graphCache = resolve("routing.graphCache", "PM_GRAPH_CACHE") ?: "graph-cache",
+                profile = resolve("routing.profile", "PM_PROFILE") ?: "pm_bike",
+                turnCosts = resolve("routing.turnCosts", "PM_TURN_COSTS")?.toBoolean() ?: true,
+                maxAlternatives = resolve("routing.maxAlternatives", "PM_MAX_ALTERNATIVES")?.toInt() ?: 3,
             )
             val engine = GraphHopperEngine(cfg).start()
             return RoutingModule(RouteService(engine), engine, weights)

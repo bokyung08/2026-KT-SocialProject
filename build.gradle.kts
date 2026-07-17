@@ -8,7 +8,8 @@ group = "kt.dinjae.pm_safeline"
 version = "1.0.0-SNAPSHOT"
 
 application {
-    mainClass = "io.ktor.server.netty.EngineMain"
+    // 커스텀 main 이 .env 를 로드(Dotenv)한 뒤 EngineMain 에 위임한다.
+    mainClass = "kt.dinjae.pm_safeline.MainKt"
 }
 
 kotlin {

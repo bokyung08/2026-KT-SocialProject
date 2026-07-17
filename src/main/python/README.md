@@ -10,14 +10,14 @@ torchvision 포맷 PyTorch `Dataset`으로 제공한다.
 
 ```
 pm_safeline/
-├── utils/       # 저수준 primitives
-│   ├── config.py       설정(대전 BBOX·경로·스트리트뷰/샘플링)
-│   ├── geo.py          OSM 도로망 → 고정간격 지점 + 방위각, 사고점 스냅
-│   ├── negatives.py    exposure-matched negative 샘플링(§4.5-2)
-│   └── streetview.py   스트리트뷰 provider(mock/google/naver-stub)
-├── datasets/    # 데이터셋 추상화 + 오케스트레이션
+├── datasets/    # 데이터셋
 │   ├── accidents.py    AccidentDataset/load_accidents — 사고 지점(KoROAD 오픈API + TAAS 수동 CSV 통합, 스키마 검증)
-│   └── roadview.py     PMRoadviewDataset/build_roadview_dataset — 로드뷰 이미지 수집(torchvision, +분할)
+│   ├── roadview.py     PMRoadviewDataset/build_roadview_dataset — 로드뷰 이미지 수집(torchvision, +분할)
+│   └── primitives/     # 데이터 파이프라인 저수준 도구
+│       ├── config.py       설정(대전 BBOX·경로·스트리트뷰/샘플링) + .env 로더
+│       ├── geo.py          OSM 도로망 → 고정간격 지점 + 방위각, 사고점 스냅
+│       ├── negatives.py    exposure-matched negative 샘플링(§4.5-2)
+│       └── streetview.py   스트리트뷰 provider(mock/google/naver/kakao)
 ├── models/      # teacher 위험도 모델(ZenSVI ViT 파인튜닝, §4.4) — 다음 단계
 └── __main__.py  # CLI (python -m pm_safeline)
 ```
@@ -25,9 +25,9 @@ pm_safeline/
 | 단계 | 모듈 | torch |
 |---|---|---|
 | 1. 사고 로드(KoROAD/TAAS) | `pm_safeline.datasets.accidents` | ❌ |
-| 2. OSM 도로망/지점 샘플링·스냅 | `pm_safeline.utils.geo` | ❌ |
-| 3. exposure-matched negative | `pm_safeline.utils.negatives` | ❌ |
-| 4. 스트리트뷰 이미지 수집 | `pm_safeline.utils.streetview`, `pm_safeline.datasets.roadview` | ❌ |
+| 2. OSM 도로망/지점 샘플링·스냅 | `pm_safeline.datasets.primitives.geo` | ❌ |
+| 3. exposure-matched negative | `pm_safeline.datasets.primitives.negatives` | ❌ |
+| 4. 스트리트뷰 이미지 수집 | `pm_safeline.datasets.primitives.streetview`, `pm_safeline.datasets.roadview` | ❌ |
 | 5. PyTorch Dataset | `pm_safeline.datasets.roadview` | ✅ (학습 시에만) |
 
 ## 사용법

@@ -19,7 +19,7 @@ METRIC_CRS = "EPSG:32652"
 WGS84 = "EPSG:4326"
 
 # 프로젝트 루트 = .../src/main/python/pm_safeline/utils/config.py 기준 5단계 상위
-_PROJECT_ROOT = Path(__file__).resolve().parents[5]
+_PROJECT_ROOT = Path(__file__).resolve().parents[6]
 
 
 def _load_dotenv() -> None:

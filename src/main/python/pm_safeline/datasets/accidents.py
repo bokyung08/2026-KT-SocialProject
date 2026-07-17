@@ -27,7 +27,7 @@ from urllib.parse import unquote
 import numpy as np
 import pandas as pd
 
-from ..utils.config import Config, DEFAULT_CONFIG
+from .primitives.config import Config, DEFAULT_CONFIG
 
 if TYPE_CHECKING:
     import geopandas as gpd

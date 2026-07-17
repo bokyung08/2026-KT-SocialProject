@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from .utils.config import Config
+from .datasets.primitives.config import Config
 
 
 def _cfg_from_args(args) -> Config:
@@ -59,7 +59,7 @@ def cmd_stats(args) -> None:
 def cmd_check(args) -> None:
     """수집 없이 import/설정 sanity check (torch 불필요)."""
     cfg = _cfg_from_args(args)
-    from .utils import geo, negatives, streetview  # noqa: F401
+    from .datasets.primitives import geo, negatives, streetview  # noqa: F401
     from .datasets.accidents import load_accidents  # noqa: F401
     from .datasets.roadview import build_roadview_dataset  # noqa: F401
 

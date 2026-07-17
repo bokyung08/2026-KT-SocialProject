@@ -20,8 +20,8 @@ from typing import Any, Callable, TYPE_CHECKING
 
 import pandas as pd
 
-from ..utils.config import Config, DEFAULT_CONFIG
-from ..utils.streetview import StreetViewProvider, get_provider
+from .primitives.config import Config, DEFAULT_CONFIG
+from .primitives.streetview import StreetViewProvider, get_provider
 
 if TYPE_CHECKING:  # 타입 힌트용(런타임 임포트 아님)
     import geopandas as gpd
@@ -147,7 +147,7 @@ def build_roadview_dataset(
         "koroad" (기본) — KoROAD 이륜차 교통사고 다발지역 오픈API 자동 다운로드.
         "taas"          — data/raw/ 의 수동 다운로드 CSV/XLSX 사용.
     """
-    from ..utils import geo, negatives
+    from .primitives import geo, negatives
     from .accidents import load_accidents
 
     print(f"[pipeline] 1/5 사고 로드 (source={source})")

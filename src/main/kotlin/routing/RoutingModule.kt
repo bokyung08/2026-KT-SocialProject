@@ -31,9 +31,25 @@ class RoutingModule private constructor(
             val osmFile = resolve("routing.osmFile", "PM_OSM_FILE")
             val weights = PmCostWeights.SAFE_DEFAULT
 
-            if (osmFile.isNullOrBlank() || !File(osmFile).exists()) {
-                log.warn("routing.osmFile 미설정 또는 파일 없음('{}') -> 엔진 비활성. /route 는 503 을 반환합니다.", osmFile)
+            if (osmFile.isNullOrBlank()) {
+                log.warn("routing.osmFile(PM_OSM_FILE) 미설정 -> 엔진 비활성. /route 는 503 을 반환합니다.")
                 return RoutingModule(null, null, weights)
+            }
+
+            // OSM 파일이 없으면 Overpass 에서 자동 다운로드(최초 1회). 서버에선 .env 만 있으면 됨.
+            val osm = File(osmFile)
+            if (!osm.exists()) {
+                val auto = resolve("routing.osmAutoDownload", "PM_OSM_AUTODOWNLOAD")?.toBoolean() ?: true
+                val bbox = resolve("routing.osmBbox", "PM_OSM_BBOX") ?: OsmDownloader.DEFAULT_BBOX
+                if (!auto) {
+                    log.warn("OSM 파일 없음('{}'), 자동 다운로드 비활성 -> 엔진 비활성.", osmFile)
+                    return RoutingModule(null, null, weights)
+                }
+                log.info("OSM 파일 없음('{}') -> 자동 다운로드 시작(bbox={}). 최초 실행은 수 분 걸릴 수 있습니다.", osmFile, bbox)
+                if (!OsmDownloader.download(osm, bbox)) {
+                    log.warn("OSM 자동 다운로드 실패 -> 엔진 비활성. /route 는 503 을 반환합니다.")
+                    return RoutingModule(null, null, weights)
+                }
             }
 
             val cfg = RoutingConfig(

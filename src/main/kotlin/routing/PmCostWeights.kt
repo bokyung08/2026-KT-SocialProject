@@ -1,4 +1,4 @@
-package kt.dinjae.traffic.routing
+package kt.dinjae.pm_safeline.routing
 
 import com.graphhopper.json.Statement
 import com.graphhopper.json.Statement.Op
@@ -63,9 +63,9 @@ data class PmCostWeights(
         cm.addToPriority(Statement.If("road_class == CYCLEWAY", Op.MULTIPLY, "1.0"))
         cm.addToPriority(Statement.If("bike_network != MISSING", Op.MULTIPLY, "1.0"))
 
-        // w4: 교차로/횡단보도 성격(링크·연결로)에 감쇠. 표준 EV 로 근사(정밀 crossing EV는 커스텀 임포트 필요).
-        cm.addToPriority(Statement.If("road_class == PRIMARY_LINK || road_class == SECONDARY_LINK || road_class == TRUNK_LINK",
-            Op.MULTIPLY, factor(crossingPenalty)))
+        // w4: 교차로/연결로(램프·링크) 성격 엣지에 감쇠. RoadClass 에는 _LINK 값이 없고
+        //     링크 여부는 별도 불린 EV road_class_link 로 표현된다(정밀 crossing EV는 커스텀 임포트 필요).
+        cm.addToPriority(Statement.If("road_class_link", Op.MULTIPLY, factor(crossingPenalty)))
 
         // w5: 버스/트램 노선 겹침. 표준 OSM EV 로는 직접 표현 불가 -> 커스텀 EV "bus_overlap" 전제.
         //     해당 EV 임포트 전에는 no-op 이 되도록 방어적으로 주석 처리된 훅.

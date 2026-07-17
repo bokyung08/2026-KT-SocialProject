@@ -1,4 +1,4 @@
-package kt.dinjae.traffic.routing
+package kt.dinjae.pm_safeline.routing
 
 import com.graphhopper.GHRequest
 import com.graphhopper.GHResponse
@@ -6,9 +6,9 @@ import com.graphhopper.ResponsePath
 import com.graphhopper.util.DistanceCalcEarth
 import com.graphhopper.util.Parameters
 import com.graphhopper.util.details.PathDetail
-import kt.dinjae.traffic.api.RouteDto
-import kt.dinjae.traffic.api.RouteMetrics
-import kt.dinjae.traffic.api.RouteResponse
+import kt.dinjae.pm_safeline.api.RouteDto
+import kt.dinjae.pm_safeline.api.RouteMetrics
+import kt.dinjae.pm_safeline.api.RouteResponse
 import org.slf4j.LoggerFactory
 
 /**
@@ -61,7 +61,7 @@ class RouteService(private val engine: GraphHopperEngine) {
             distanceMeters = path.distance,
             durationMillis = path.time,
             weight = path.routeWeight,
-            safetyScore = safetyScore(metrics),
+            safetyScore = safetyScore(metrics, path.distance),
             geometry = path.points.map { listOf(it.lon, it.lat) },
             metrics = metrics,
         )
@@ -129,11 +129,17 @@ class RouteService(private val engine: GraphHopperEngine) {
 
     private enum class RoadGroup { CYCLE, FOOT, ROAD }
 
-    /** 안전점수(0~100): 전환 적고 자전거도로 비율 높을수록 높음(§1.4). 임시 공식. */
-    private fun safetyScore(m: RouteMetrics): Double {
-        val base = 100.0 * m.bikeInfraRatio
-        val penalty = m.transitionCount * 5.0
-        return (base - penalty).coerceIn(0.0, 100.0)
+    /**
+     * 안전점수(0~100): 자전거도로 비율과 "연속성"(거리 정규화 전환 빈도)을 절반씩 반영(§1.4).
+     * 전환은 절대횟수가 아니라 km당 빈도로 보정(긴 경로에 불리하지 않게). 임시 공식.
+     */
+    private fun safetyScore(m: RouteMetrics, distanceMeters: Double): Double {
+        val km = (distanceMeters / 1000.0).coerceAtLeast(0.1)
+        val transitionsPerKm = m.transitionCount / km
+        // km당 3회 이상 전환이면 연속성 0, 0회면 1.
+        val continuity = (1.0 - (transitionsPerKm / 3.0)).coerceIn(0.0, 1.0)
+        val score = 100.0 * (0.5 * m.bikeInfraRatio + 0.5 * continuity)
+        return score.coerceIn(0.0, 100.0)
     }
 }
 

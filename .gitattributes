@@ -1,0 +1,6 @@
+# 배포 서버(Linux)에서 CRLF 로 깨지지 않도록 셸 스크립트·systemd 유닛·gradlew 는 LF 강제.
+*.sh            text eol=lf
+deploy/systemd/* text eol=lf
+gradlew         text eol=lf
+*.service       text eol=lf
+*.timer         text eol=lf

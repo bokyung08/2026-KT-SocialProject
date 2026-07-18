@@ -29,6 +29,13 @@ dependencies = [
     "nbconvert>=7.17.1",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/main/python/pm_safeline"]
+
 [tool.uv.sources]
 torch = [
     { index = "pytorch-cu128" },

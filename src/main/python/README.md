@@ -41,11 +41,10 @@ pm_safeline/
 
 ## 사용법
 
-모든 명령은 `src/main/python/` 에서 실행한다.
+`uv sync` 하면 `pm_safeline` 이 editable 로 설치되어(빌드 대상: `src/main/python/pm_safeline`)
+어느 디렉토리에서든 `import pm_safeline` 가 된다. sys.path 조작이 필요 없다.
 
 ```bash
-cd src/main/python
-
 # 0) 설정 점검 (torch 불필요)
 python -m pm_safeline check
 
@@ -75,7 +74,7 @@ python -m pm_safeline stats
 
 ## PyTorch Dataset
 
-`src/main/python` 이 sys.path 에 있을 때(학습 스크립트를 이 디렉토리에서 실행):
+`uv sync` 로 패키지가 설치되어 있으면 어디서든:
 
 ```python
 from pm_safeline.datasets.roadview import PMRoadviewDataset, default_transform

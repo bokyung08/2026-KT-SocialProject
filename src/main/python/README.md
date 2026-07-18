@@ -25,7 +25,7 @@ pm_safeline/
 │   └── irl.py           역강화학습(§4.2·4.4): edge→route 위험 집계(hazard-rate, §4.5-3) + 경로쌍 선호→Bradley-Terry w1~w5 학습
 └── __main__.py  # CLI (python -m pm_safeline)
 ```
-학습·IRL 노트북: `src/test/notebooks/{test_datasets,train_teacher,train_irl}.ipynb`
+학습·IRL 노트북: `src/test/ipython/{test_datasets,train_teacher,train_irl}.ipynb`
 
 | 단계 | 모듈 | torch |
 |---|---|---|
@@ -112,7 +112,7 @@ folds = kfold_indices(manifest_or_dataset, n_splits=5)   # 적은 데이터 신�
 ```bash
 uv sync            # .venv (Py3.12) 생성 + 전체 의존성(torch 포함) 설치
 
-# 노트북: teacher 학습 / IRL  (src/test/notebooks/)
+# 노트북: teacher 학습 / IRL  (src/test/ipython/)
 #   train_teacher.ipynb  (실 manifest 필요 → 먼저 python -m pm_safeline collect)
 #   train_irl.ipynb      (합성 데모 → 학습된 w1~w5 출력)
 ```

@@ -3,7 +3,7 @@ name = "proj"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "contextily>=1.7.0",
     "folium>=0.20.0",
@@ -13,21 +13,16 @@ dependencies = [
     "matplotlib>=3.10.9",
     "nbclient>=0.10.4",
     "nbconvert>=7.17.1",
-    "numpy>=2.4.6",
+    "numpy>=2.1.0",
     "osmnx>=2.1.0",
-    "pandas>=3.0.3",
-    "scikit-learn>=1.9.0",
-    "scipy>=1.17.1",
+    "pandas>=2.2.0",
+    "scikit-learn>=1.5.0",
+    "scipy>=1.13.0",
     "seaborn>=0.13.2",
     "xgboost>=3.2.0",
     "pillow>=11.0.0",
     "requests>=2.32.0",
-]
-
-[project.optional-dependencies]
-# 학습(teacher 모델)용. Py3.14 torch 휠 부재 시 별도 env 권장:
-#   uv venv --python 3.12 .venv-train && .venv-train/bin/pip install -e ".[train]"
-train = [
+    # 학습(teacher ViT). Py3.12 라 단일 venv 에 포함.
     "torch>=2.4.0",
     "torchvision>=0.19.0",
 ]

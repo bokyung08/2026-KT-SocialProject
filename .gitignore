@@ -250,5 +250,3 @@ cache/
 /docs/.swagger-codegen/
 /docs/.swagger-codegen-ignore
 
-# 학습 전용 torch env (Py3.12)
-.venv-train/

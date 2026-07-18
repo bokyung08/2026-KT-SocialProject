@@ -1,13 +1,19 @@
-"""bradley_terry — Bradley-Terry 랭킹 로스로 비용함수 가중치 w1~w5 학습(PROJECT.md §4.2).
+"""irl — Bradley-Terry 기반 IRL 가중치 학습 (PROJECT.md §4.2, §4.4, §4.5-3).
 
-    P(A ≻ B) = sigmoid(w·x_A - w·x_B)
-    Loss = -Σ log P(선호된 경로 ≻ 비선호 경로) + l2*||w||^2
+teacher(이미지 위험도 모델)의 edge-risk 를 route-risk 로 집계하고, 경로쌍 선호
+라벨로부터 비용함수 가중치 w1~w5 를 Bradley-Terry 랭킹 로스로 학습한다.
+numpy/scipy 기반 (offline 학습 단계). 학습 완료 후에는 고정된 선형 비용함수만
+서비스에 배포된다(§4.2) — 서빙 시점에 이 모듈이나 teacher 호출은 없다.
 
-로지스틱 회귀와 동일한 convex 최적화. `w >= 0` 제약을 걸어 해석 가능한(가중합) 형태를
-유지한다(거리/차도/전환/교차로/버스 페널티가 비용을 늘리는 방향으로만 작동).
-
-학습은 offline(느려도 됨) — 학습된 w 는 고정 선형 비용함수로 실서비스(A*)에 주입되며,
-서빙 시점에는 이 모듈이나 teacher 모델 호출이 전혀 없다(§4.2).
+구성:
+    route 위험 집계 (§4.5-3)
+        aggregate() / route_risk()  : edge 사고확률 -> route 위험도(hazard-rate 등)
+    Bradley-Terry 가중치 학습 (§4.2)
+        route_features()            : route 원시 지표 -> 5-차원 feature 벡터
+        make_preference_pairs()     : route 목록 -> (X_A, X_B, prefer) 선호쌍
+        fit_bradley_terry()         : 선호쌍 -> 비용 가중치 w1~w5 (nonneg)
+        learn_weights_from_routes() : 위 단계를 잇는 편의 함수
+        BTResult                    : 학습 결과 dataclass
 """
 
 from __future__ import annotations
@@ -16,6 +22,79 @@ from dataclasses import dataclass
 
 import numpy as np
 from scipy.optimize import minimize
+
+# --------------------------------------------------------------------------- #
+# route 위험 집계 (§4.5-3)
+#
+# edge 단위 사고 위험확률을 route(경로) 단위 위험도로 집계. hazard-rate 기반
+# 생존모델을 기본(권장)으로, 비교용으로 mean/max/sum/count 베이스라인도 제공.
+#
+#     route_risk = 1 - exp(-Σ h_i * L_i),   h_i = -ln(1 - p_i) / L_i
+#                = 1 - Π (1 - p_i)
+#
+# - p_i : edge i 의 사고확률(teacher 모델 출력, [0,1))
+# - L_i : edge i 의 길이(m). hazard 형태에서는 h_i*L_i = -ln(1-p_i) 로 상쇄되어
+#         route_risk 계산에는 길이가 다시 등장하지 않지만(닫힌 형태가 곱으로 축약),
+#         길이는 각 edge 의 "노출량"을 표현하는 개념적 근거로 남겨둔다.
+# --------------------------------------------------------------------------- #
+
+_EPS = 1e-9
+_P_CLIP_MAX = 1.0 - 1e-6  # p_i -> 1 이면 ln(1-p_i) 발산하므로 clip
+
+
+def _clip_probs(edge_probs: np.ndarray) -> np.ndarray:
+    return np.clip(np.asarray(edge_probs, dtype=float), 0.0, _P_CLIP_MAX)
+
+
+def aggregate(
+    edge_probs: np.ndarray,
+    edge_lengths: np.ndarray | None = None,
+    *,
+    method: str = "hazard",
+    tau: float = 0.5,
+) -> float:
+    """edge_probs(사고확률)을 route 단위 스칼라 위험도로 집계.
+
+    method:
+        "hazard" (권장, §4.5-3) : 1 - exp(-Σ h_i*L_i) = 1 - Π(1-p_i)
+        "mean"                  : 평균 - 위험구간이 경로 길이에 희석됨
+        "max"                   : 최댓값 - 위험구간 개수 정보 손실
+        "sum"                   : 합 - 경로 길이(엣지 수)에 비례해 왜곡
+        "count"                 : 임계값 tau 초과 edge 개수
+    """
+    p = _clip_probs(edge_probs)
+    if p.size == 0:
+        return 0.0
+
+    if method == "hazard":
+        # h_i * L_i = -ln(1-p_i) 이므로 L_i 값 자체는 상쇄되어 필요 없다(개념적 근거만 유지).
+        return float(1.0 - np.exp(np.sum(np.log1p(-p))))
+    if method == "mean":
+        return float(np.mean(p))
+    if method == "max":
+        return float(np.max(p))
+    if method == "sum":
+        return float(np.sum(p))
+    if method == "count":
+        return float(np.sum(p > tau))
+    raise ValueError(f"알 수 없는 method: {method} (hazard|mean|max|sum|count)")
+
+
+def route_risk(edge_probs: np.ndarray, edge_lengths: np.ndarray | None = None) -> float:
+    """§4.5-3 권장안(hazard-rate 생존모델)의 route-risk 편의 함수."""
+    return aggregate(edge_probs, edge_lengths, method="hazard")
+
+
+# --------------------------------------------------------------------------- #
+# Bradley-Terry 가중치 학습 (§4.2)
+#
+#     P(A ≻ B) = sigmoid(w·x_A - w·x_B)
+#     Loss = -Σ log P(선호된 경로 ≻ 비선호 경로) + l2*||w||^2
+#
+# 로지스틱 회귀와 동일한 convex 최적화. w >= 0 제약을 걸어 해석 가능한(가중합)
+# 형태를 유지한다(거리/차도/전환/교차로/버스 페널티가 비용을 늘리는 방향으로만).
+# 학습된 w 는 고정 선형 비용함수로 실서비스(A*)에 주입된다.
+# --------------------------------------------------------------------------- #
 
 # feature 순서: [거리, 차도, 전환, 교차로, 버스겹침] — kt.dinjae.pm_safeline.PmCostWeights(w1..w5)와 대응
 FEATURE_NAMES = ("distance", "arterial", "transition", "crossing", "bus")
@@ -43,7 +122,7 @@ def route_features(
 
     - distance_km       : 경로 총 거리(km)
     - arterial          : 차도구간 비율 또는 길이(호출 측에서 단위 통일해 전달)
-        - transition_count  : 도로유형 전환 횟수
+    - transition_count  : 도로유형 전환 횟수
     - crossing_count    : 교차로/횡단보도 통과 횟수
     - bus_overlap       : 버스노선과 겹치는 구간(비율 또는 길이, 호출 측 단위 통일)
 
@@ -183,7 +262,7 @@ def learn_weights_from_routes(
     """route_risk 집계 + 선호쌍 샘플링 + Bradley-Terry 학습을 잇는 편의 함수.
 
     routes: 각 원소가 (feature_vector(5,), edge_probs, edge_lengths) 튜플인 리스트.
-    edge_risk_fn: (edge_probs, edge_lengths) -> route_risk 스칼라 (예: route_risk.route_risk).
+    edge_risk_fn: (edge_probs, edge_lengths) -> route_risk 스칼라 (예: route_risk).
 
     반환: 학습된 weights (shape (5,)).
     """

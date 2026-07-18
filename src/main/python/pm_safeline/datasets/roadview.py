@@ -104,10 +104,10 @@ def collect_images(
     rows = labeled_points.iloc[:limit] if limit else labeled_points
     total = len(rows)
     for i, (_, row) in enumerate(rows.iterrows(), 1):
-        label = int(row["label"])
+        label = int(row['label'])
         cls = CLASS_NAMES[label]
         for heading in _headings_for(row, headings):
-            pid = str(row["point_id"])
+            pid = str(row['point_id'])
             fname = f"{pid}_h{int(round(heading)):03d}.jpg"
             out_path = img_dir / cls / fname
 
@@ -115,7 +115,7 @@ def collect_images(
                 img = out_path.read_bytes()
             else:
                 try:
-                    img = provider.fetch(float(row["lat"]), float(row["lon"]), heading)
+                    img = provider.fetch(float(row['lat']), float(row['lon']), heading)
                 except Exception as e:  # noqa: BLE001
                     print(f"[collect] {pid} h{heading} 실패: {e}")
                     continue
@@ -133,15 +133,15 @@ def collect_images(
 
             records.append(
                 {
-                    "point_id": pid,
-                    "label": label,
-                    "class": cls,
-                    "lat": float(row["lat"]),
-                    "lon": float(row["lon"]),
-                    "heading": round(float(heading), 1),
-                    "severity": row.get("severity"),
-                    "mode": row.get("mode"),
-                    "path": str(out_path.relative_to(data_root(root))),
+                    'point_id': pid,
+                    'label': label,
+                    'class': cls,
+                    'lat': float(row['lat']),
+                    'lon': float(row['lon']),
+                    'heading': round(float(heading), 1),
+                    'severity': row.get("severity"),
+                    'mode': row.get("mode"),
+                    'path': str(out_path.relative_to(data_root(root))),
                 }
             )
         if i % 100 == 0 or i == total:
@@ -209,7 +209,7 @@ def build_roadview_dataset(
         candidates = geo.sample_points_along_edges(edges, sample_interval_m=sample_interval_m)
         negs = negatives.sample_negatives(acc_snapped, candidates, negative_ratio=negative_ratio, seed=seed)
         labeled_r = negatives.build_labeled_points(acc_snapped, negs)
-        labeled_r["point_id"] = rname + "_" + labeled_r["point_id"].astype(str)  # 지역 prefix 로 고유화
+        labeled_r['point_id'] = rname + "_" + labeled_r['point_id'].astype(str)  # 지역 prefix 로 고유화
         parts.append(labeled_r)
 
     labeled = gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), geometry="geometry", crs="EPSG:4326")
@@ -279,7 +279,7 @@ class PMRoadviewDataset(Dataset):
         from PIL import Image
 
         row = self.frame.iloc[index]
-        img_path = self.root / str(row["path"])
+        img_path = self.root / str(row['path'])
         image = Image.open(img_path).convert("RGB")
 
         target = row[self.target_key]
@@ -290,12 +290,12 @@ class PMRoadviewDataset(Dataset):
 
         if self.return_meta:
             meta = {
-                "point_id": row.get("point_id"),
-                "lat": row.get("lat"),
-                "lon": row.get("lon"),
-                "heading": row.get("heading"),
-                "severity": row.get("severity"),
-                "mode": row.get("mode"),
+                'point_id': row.get("point_id"),
+                'lat': row.get("lat"),
+                'lon': row.get("lon"),
+                'heading': row.get("heading"),
+                'severity': row.get("severity"),
+                'mode': row.get("mode"),
             }
             return image, target, meta
         return image, target
@@ -312,7 +312,7 @@ class PMRoadviewDataset(Dataset):
 
     def class_weights(self):
         """클래스 불균형(§4.5-1) 대응용 역빈도 가중치 텐서."""
-        labels = self.frame["label"].to_numpy()
+        labels = self.frame['label'].to_numpy()
         counts = [max(1, int((labels == c).sum())) for c in (0, 1)]
         w = torch.tensor([sum(counts) / c for c in counts], dtype=torch.float32)
         return w / w.sum()

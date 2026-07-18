@@ -102,15 +102,15 @@ def _fetch_page(
     page: int, rows: int, timeout: float,
 ) -> dict:
     params = {
-        "authKey": key,
-        "searchYearCd": str(year),
-        "siDo": sido,
-        "type": "json",
-        "numOfRows": str(rows),
-        "pageNo": str(page),
+        'authKey': key,
+        'searchYearCd': str(year),
+        'siDo': sido,
+        'type': "json",
+        'numOfRows': str(rows),
+        'pageNo': str(page),
     }
     if gugun:
-        params["guGun"] = gugun
+        params['guGun'] = gugun
     r = session.get(f"{_KOROAD_BASE_URL}/{kind}", params=params, timeout=timeout)
     r.raise_for_status()
     return r.json()
@@ -176,30 +176,30 @@ def _koroad_fetch(
                             break
                         for it in items:
                             try:
-                                lon = float(it["lo_crd"])
-                                lat = float(it["la_crd"])
+                                lon = float(it['lo_crd'])
+                                lat = float(it['la_crd'])
                             except (KeyError, TypeError, ValueError):
                                 continue
                             dth = int(it.get("dth_dnv_cnt", 0) or 0)
                             se = int(it.get("se_dnv_cnt", 0) or 0)
                             sl = int(it.get("sl_dnv_cnt", 0) or 0)
                             rows_out.append({
-                                "region": region.name,
-                                "datetime": pd.NaT,
-                                "lat": lat,
-                                "lon": lon,
-                                "severity": _severity_from_counts(dth, se, sl),
-                                "mode": f"{kind}_frequentzone",
-                                "occrrnc_cnt": int(it.get("occrrnc_cnt", 0) or 0),
-                                "caslt_cnt": int(it.get("caslt_cnt", 0) or 0),
-                                "dth_dnv_cnt": dth,
-                                "se_dnv_cnt": se,
-                                "sl_dnv_cnt": sl,
-                                "wnd_dnv_cnt": int(it.get("wnd_dnv_cnt", 0) or 0),
-                                "year": year,
-                                "sido_sgg_nm": it.get("sido_sgg_nm"),
-                                "spot_nm": it.get("spot_nm"),
-                                "geom_json": it.get("geom_json"),
+                                'region': region.name,
+                                'datetime': pd.NaT,
+                                'lat': lat,
+                                'lon': lon,
+                                'severity': _severity_from_counts(dth, se, sl),
+                                'mode': f"{kind}_frequentzone",
+                                'occrrnc_cnt': int(it.get("occrrnc_cnt", 0) or 0),
+                                'caslt_cnt': int(it.get("caslt_cnt", 0) or 0),
+                                'dth_dnv_cnt': dth,
+                                'se_dnv_cnt': se,
+                                'sl_dnv_cnt': sl,
+                                'wnd_dnv_cnt': int(it.get("wnd_dnv_cnt", 0) or 0),
+                                'year': year,
+                                'sido_sgg_nm': it.get("sido_sgg_nm"),
+                                'spot_nm': it.get("spot_nm"),
+                                'geom_json': it.get("geom_json"),
                             })
                         total = int(payload.get("totalCount", 0) or 0)
                         if page * rows >= total or not items:
@@ -213,11 +213,11 @@ def _koroad_fetch(
 
     df = pd.DataFrame(rows_out).reset_index(drop=True)
     # 사고 좌표는 데이터가 정한다 — bbox 로 임의로 자르지 않는다(KoROAD 가 준 지점 전부 사용).
-    df["accident_id"] = range(1, len(df) + 1)
+    df['accident_id'] = range(1, len(df) + 1)
 
     return gpd.GeoDataFrame(
         df,
-        geometry=[Point(xy) for xy in zip(df["lon"], df["lat"])],
+        geometry=[Point(xy) for xy in zip(df['lon'], df['lat'])],
         crs="EPSG:4326",
     )
 
@@ -340,13 +340,13 @@ def _taas_load(*, root: str | Path | None = None, pm_only: bool = True) -> "gpd.
     merged = pd.concat(frames, ignore_index=True)
     merged = merged.dropna(subset=["lat", "lon"]).reset_index(drop=True)
     # 사고 좌표는 데이터가 정한다 — bbox 로 자르지 않는다(좌표 있는 사고 전부 사용).
-    merged["accident_id"] = np.arange(1, len(merged) + 1)
+    merged['accident_id'] = np.arange(1, len(merged) + 1)
     gdf = gpd.GeoDataFrame(
         merged,
-        geometry=[Point(xy) for xy in zip(merged["lon"], merged["lat"])],
+        geometry=[Point(xy) for xy in zip(merged['lon'], merged['lat'])],
         crs="EPSG:4326",
     )
-    return gdf[["accident_id", "datetime", "lat", "lon", "severity", "mode", "geometry"]]
+    return gdf[['accident_id', 'datetime', 'lat', 'lon', 'severity', 'mode', 'geometry']]
 
 
 def _taas_normalize_frame(df: pd.DataFrame, *, source: str, pm_only: bool) -> pd.DataFrame | None:
@@ -357,23 +357,23 @@ def _taas_normalize_frame(df: pd.DataFrame, *, source: str, pm_only: bool) -> pd
         return None
 
     out = pd.DataFrame()
-    out["lat"] = pd.to_numeric(df[lat_c], errors="coerce")
-    out["lon"] = pd.to_numeric(df[lon_c], errors="coerce")
+    out['lat'] = pd.to_numeric(df[lat_c], errors="coerce")
+    out['lon'] = pd.to_numeric(df[lon_c], errors="coerce")
 
     time_c = _find_col(cols, _TAAS_TIME_KEYS)
-    out["datetime"] = pd.to_datetime(df[time_c], errors="coerce") if time_c else pd.NaT
+    out['datetime'] = pd.to_datetime(df[time_c], errors="coerce") if time_c else pd.NaT
 
     sev_c = _find_col(cols, _TAAS_SEV_KEYS)
-    out["severity"] = df[sev_c].map(_norm_severity) if sev_c else "경상"
+    out['severity'] = df[sev_c].map(_norm_severity) if sev_c else "경상"
 
     mode_c = _find_col(cols, _TAAS_MODE_KEYS)
     if mode_c is not None:
-        out["mode"] = df[mode_c].astype(str)
+        out['mode'] = df[mode_c].astype(str)
         if pm_only:
-            mask = out["mode"].str.contains(_TAAS_PM_PATTERNS, na=False)
+            mask = out['mode'].str.contains(_TAAS_PM_PATTERNS, na=False)
             out = out[mask]
     else:
-        out["mode"] = "unknown"
+        out['mode'] = "unknown"
         if pm_only:
             print(f"[taas] {source}: 당사자종별 컬럼 없음 -> PM 필터 미적용(전량 유지)")
 
@@ -408,7 +408,7 @@ def _load_accident_gdf(
             import geopandas as gpd
 
             df = pd.read_csv(cache)
-            gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df["lon"], df["lat"]), crs=WGS84)
+            gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['lon'], df['lat']), crs=WGS84)
     elif source == "taas":
         gdf = _taas_load(root=root, pm_only=pm_only)
     else:
@@ -427,7 +427,7 @@ def _drop_out_of_region(gdf, *, regions: tuple[str, ...] | None = None):
     bboxes = [REGIONS[r].bbox for r in region_names if r in REGIONS]
     inb = None
     for w, s, e, n in bboxes:
-        cond = gdf["lat"].between(s, n) & gdf["lon"].between(w, e)
+        cond = gdf['lat'].between(s, n) & gdf['lon'].between(w, e)
         inb = cond if inb is None else (inb | cond)
     dropped = int((~inb).sum())
     if dropped:
@@ -480,8 +480,8 @@ class AccidentDataset(Dataset):
 
     def __getitem__(self, index: int) -> tuple[Any, Any]:
         row = self.gdf.iloc[index]
-        sample: Any = torch.tensor([float(row["lat"]), float(row["lon"])], dtype=torch.float32)
-        target: Any = self.classes.index(str(row["severity"]))
+        sample: Any = torch.tensor([float(row['lat']), float(row['lon'])], dtype=torch.float32)
+        target: Any = self.classes.index(str(row['severity']))
         if self.transform is not None:
             sample = self.transform(sample)
         if self.target_transform is not None:
@@ -490,7 +490,7 @@ class AccidentDataset(Dataset):
 
     @property
     def targets(self) -> list[int]:
-        return [self.classes.index(s) for s in self.gdf["severity"].astype(str)]
+        return [self.classes.index(s) for s in self.gdf['severity'].astype(str)]
 
     def to_geodataframe(self) -> "gpd.GeoDataFrame":
         return self.gdf
@@ -508,17 +508,17 @@ def _validate(gdf) -> "gpd.GeoDataFrame":
         raise SchemaError(f"필수 컬럼 누락: {missing} (필요: {CORE_COLUMNS})")
 
     out = gdf.copy()
-    out["accident_id"] = pd.to_numeric(out["accident_id"], errors="coerce").astype("Int64")
-    out["datetime"] = pd.to_datetime(out["datetime"], errors="coerce")
-    out["lat"] = pd.to_numeric(out["lat"], errors="coerce")
-    out["lon"] = pd.to_numeric(out["lon"], errors="coerce")
-    out["severity"] = out["severity"].astype(str)
-    out["mode"] = out["mode"].astype(str)
+    out['accident_id'] = pd.to_numeric(out['accident_id'], errors="coerce").astype("Int64")
+    out['datetime'] = pd.to_datetime(out['datetime'], errors="coerce")
+    out['lat'] = pd.to_numeric(out['lat'], errors="coerce")
+    out['lon'] = pd.to_numeric(out['lon'], errors="coerce")
+    out['severity'] = out['severity'].astype(str)
+    out['mode'] = out['mode'].astype(str)
 
-    bad_sev = set(out["severity"].unique()) - set(SEVERITY_LEVELS)
+    bad_sev = set(out['severity'].unique()) - set(SEVERITY_LEVELS)
     if bad_sev:
         raise SchemaError(f"허용되지 않은 severity 값: {bad_sev} (허용: {SEVERITY_LEVELS})")
-    if out[["lat", "lon"]].isna().any().any():
+    if out[['lat', 'lon']].isna().any().any():
         raise SchemaError("lat/lon 에 결측/비수치 값이 있습니다.")
 
     if out.crs is None:

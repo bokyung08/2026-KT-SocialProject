@@ -22,7 +22,7 @@ from .datasets.primitives.config import data_root, default_provider, manifest_pa
 
 def _apply_data_dir(args) -> Path | None:
     if args.data_dir:
-        os.environ["PM_DATA_DIR"] = args.data_dir
+        os.environ['PM_DATA_DIR'] = args.data_dir
     return data_root()
 
 
@@ -53,10 +53,10 @@ def cmd_stats(args) -> None:
         return
     df = pd.read_csv(mpath)
     print(f"이미지 {len(df)}장, 지점 {df['point_id'].nunique()}개")
-    print(df["class"].value_counts().to_string())
+    print(df['class'].value_counts().to_string())
     if "severity" in df:
         print("\n[severity]")
-        print(df[df.label == 1]["severity"].value_counts().to_string())
+        print(df[df.label == 1]['severity'].value_counts().to_string())
 
 
 def cmd_check(args) -> None:

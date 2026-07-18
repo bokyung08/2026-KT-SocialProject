@@ -54,7 +54,7 @@ def _make_loader(ds: Dataset, cfg: TrainConfig, *, shuffle: bool) -> DataLoader:
     )
 
 
-def _unpack_batch(batch) -> tuple["torch.Tensor", "torch.Tensor"]:
+def _unpack_batch(batch) -> tuple['torch.Tensor', 'torch.Tensor']:
     """(image, target) 또는 (image, target, meta) 배치를 (x, y) 로 정규화."""
     x, y = batch[0], batch[1]
     return x, y
@@ -92,7 +92,7 @@ def evaluate(model: nn.Module, ds: Dataset, cfg: TrainConfig, *, pos_weight=None
         auc = float(roc_auc_score(targets_np, probs_np))
         ap = float(average_precision_score(targets_np, probs_np))
 
-    return {"loss": loss, "auc": auc, "ap": ap}
+    return {'loss': loss, 'auc': auc, 'ap': ap}
 
 
 def train_teacher(
@@ -124,7 +124,7 @@ def train_teacher(
     )
     scaler = torch.amp.GradScaler(enabled=(cfg.amp and cfg.device == "cuda"))
 
-    history = {"train_loss": [], "valid_loss": [], "valid_auc": [], "valid_ap": []}
+    history = {'train_loss': [], 'valid_loss': [], 'valid_auc': [], 'valid_ap': []}
     best_auc = float("-inf")
     best_state = copy.deepcopy(model.state_dict())
     best_epoch = -1
@@ -158,10 +158,10 @@ def train_teacher(
         train_loss = running_loss / max(1, n_samples)
         valid_metrics = evaluate(model, valid_ds, cfg, pos_weight=pos_weight_dev)
 
-        history["train_loss"].append(train_loss)
-        history["valid_loss"].append(valid_metrics["loss"])
-        history["valid_auc"].append(valid_metrics["auc"])
-        history["valid_ap"].append(valid_metrics["ap"])
+        history['train_loss'].append(train_loss)
+        history['valid_loss'].append(valid_metrics['loss'])
+        history['valid_auc'].append(valid_metrics['auc'])
+        history['valid_ap'].append(valid_metrics['ap'])
 
         print(
             f"[train_teacher] epoch {epoch + 1}/{cfg.epochs} "
@@ -169,7 +169,7 @@ def train_teacher(
             f"valid_auc={valid_metrics['auc']:.4f}"
         )
 
-        cur_auc = valid_metrics["auc"]
+        cur_auc = valid_metrics['auc']
         if cur_auc == cur_auc and cur_auc > best_auc:  # NaN 이 아니고 개선됨
             best_auc = cur_auc
             best_state = copy.deepcopy(model.state_dict())
@@ -182,10 +182,10 @@ def train_teacher(
                 break
 
     return {
-        "history": history,
-        "best_state": best_state,
-        "best_epoch": best_epoch,
-        "best_auc": best_auc,
+        'history': history,
+        'best_state': best_state,
+        'best_epoch': best_epoch,
+        'best_auc': best_auc,
     }
 
 
@@ -216,7 +216,7 @@ def cross_validate(
 
         model = build_model_fn()
         result = train_teacher(model, train_sub, valid_sub, cfg=cfg, pos_weight=pos_weight)
-        fold_aucs.append(result["best_auc"])
+        fold_aucs.append(result['best_auc'])
 
     import statistics
 
@@ -224,7 +224,7 @@ def cross_validate(
     mean_auc = statistics.fmean(finite) if finite else float("nan")
     std_auc = statistics.pstdev(finite) if len(finite) > 1 else 0.0
 
-    return {"fold_aucs": fold_aucs, "mean_auc": mean_auc, "std_auc": std_auc}
+    return {'fold_aucs': fold_aucs, 'mean_auc': mean_auc, 'std_auc': std_auc}
 
 
 class _TemperatureCalibrator:
@@ -280,7 +280,7 @@ def save_checkpoint(model: nn.Module, path: "str | Path", extra: dict | None = N
     """모델 state_dict(+옵션 부가정보) 저장."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload: dict[str, Any] = {"state_dict": model.state_dict()}
+    payload: dict[str, Any] = {'state_dict': model.state_dict()}
     if extra:
         payload.update(extra)
     torch.save(payload, path)

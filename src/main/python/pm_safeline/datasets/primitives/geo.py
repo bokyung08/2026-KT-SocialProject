@@ -93,15 +93,15 @@ def sample_points_along_edges(
             b = geom.interpolate(min(length, d + 1.0))
             rows.append(
                 {
-                    "geometry": pt,
-                    "heading_xy": math.degrees(math.atan2(b.x - a.x, b.y - a.y)) % 360.0,
-                    "edge_id": f"{row.get('u', idx)}_{row.get('v', '')}_{row.get('key', 0)}",
-                    "highway": _norm_highway(row.get("highway")),
+                    'geometry': pt,
+                    'heading_xy': math.degrees(math.atan2(b.x - a.x, b.y - a.y)) % 360.0,
+                    'edge_id': f"{row.get('u', idx)}_{row.get('v', '')}_{row.get('key', 0)}",
+                    'highway': _norm_highway(row.get("highway")),
                 }
             )
 
     out = gpd.GeoDataFrame(rows, geometry="geometry", crs=metric_crs).to_crs(WGS84_STR)
-    out["heading"] = out.pop("heading_xy").round(1)
+    out['heading'] = out.pop("heading_xy").round(1)
     return out
 
 
@@ -146,6 +146,6 @@ def snap_accidents_to_edges(
             headings.append(float("nan"))
             edge_ids.append("")
 
-    joined["heading"] = np.round(headings, 1)
-    joined["edge_id"] = edge_ids
+    joined['heading'] = np.round(headings, 1)
+    joined['edge_id'] = edge_ids
     return joined.to_crs(WGS84_STR)

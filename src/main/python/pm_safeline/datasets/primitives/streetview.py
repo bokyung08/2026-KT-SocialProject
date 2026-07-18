@@ -116,11 +116,11 @@ class GoogleProvider(StreetViewProvider):
         import requests
 
         params = {
-            "location": f"{lat},{lon}",
-            "heading": round(heading, 1),
-            "fov": self.fov,
-            "pitch": self.pitch,
-            "key": self.api_key,
+            'location': f"{lat},{lon}",
+            'heading': round(heading, 1),
+            'fov': self.fov,
+            'pitch': self.pitch,
+            'key': self.api_key,
         }
         # 1) 커버리지 확인(무료)
         self._throttle()
@@ -130,7 +130,7 @@ class GoogleProvider(StreetViewProvider):
         # 2) 이미지
         self._throttle()
         size = f"{self.width}x{self.height}"
-        r = requests.get(self._IMG_URL, params={**params, "size": size}, timeout=15)
+        r = requests.get(self._IMG_URL, params={**params, 'size': size}, timeout=15)
         if r.status_code != 200 or not r.content:
             return None
         return r.content
@@ -168,8 +168,8 @@ class NaverProvider(StreetViewProvider):
     _STRIP_URL = "https://panorama.pstatic.net/image/{panoid}/512/P"
     _FACE_PX = 256
     _HEADERS = {
-        "Referer": "https://map.naver.com",
-        "User-Agent": "Mozilla/5.0 (compatible; pm-proj/1.0)",
+        'Referer': "https://map.naver.com",
+        'User-Agent': "Mozilla/5.0 (compatible; pm-proj/1.0)",
     }
     _TILE = 512  # 타일 한 변(px)
 
@@ -296,9 +296,9 @@ class NaverProvider(StreetViewProvider):
 
 
 _REGISTRY: dict[str, type[StreetViewProvider]] = {
-    "mock": MockProvider,
-    "google": GoogleProvider,
-    "naver": NaverProvider,
+    'mock': MockProvider,
+    'google': GoogleProvider,
+    'naver': NaverProvider,
 }
 
 

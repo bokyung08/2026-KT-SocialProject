@@ -24,10 +24,10 @@ if TYPE_CHECKING:
 
 # 도로 위계 -> 대리 exposure 순위(클수록 통행량 많다고 가정)
 _HIGHWAY_RANK = {
-    "motorway": 6, "trunk": 6, "primary": 5, "primary_link": 5,
-    "secondary": 4, "secondary_link": 4, "tertiary": 3, "tertiary_link": 3,
-    "residential": 2, "living_street": 2, "unclassified": 2,
-    "service": 1, "cycleway": 1, "footway": 1, "path": 1, "pedestrian": 1,
+    'motorway': 6, 'trunk': 6, 'primary': 5, 'primary_link': 5,
+    'secondary': 4, 'secondary_link': 4, 'tertiary': 3, 'tertiary_link': 3,
+    'residential': 2, 'living_street': 2, 'unclassified': 2,
+    'service': 1, 'cycleway': 1, 'footway': 1, 'path': 1, 'pedestrian': 1,
 }
 
 
@@ -97,8 +97,8 @@ def sample_negatives(
         chosen_idx.extend(rng.choice(pool, size=want, replace=False).tolist())
 
     neg = cand_reset.iloc[sorted(set(chosen_idx))].copy()
-    neg["label"] = 0
-    neg["exposure_bin"] = np.clip(
+    neg['label'] = 0
+    neg['exposure_bin'] = np.clip(
         np.digitize(
             neg.apply(
                 lambda r: _exposure_score(r.get("highway"), r.get(exposure_col) if exposure_col else None),
@@ -148,13 +148,13 @@ def build_labeled_points(
     import geopandas as gpd
 
     pos = accidents.copy()
-    pos["label"] = 1
-    pos["point_id"] = ["acc_%06d" % i for i in range(len(pos))]
+    pos['label'] = 1
+    pos['point_id'] = ["acc_%06d" % i for i in range(len(pos))]
 
     neg = negatives.copy()
-    neg["severity"] = neg.get("severity", "none")
-    neg["mode"] = neg.get("mode", "none")
-    neg["point_id"] = ["neg_%06d" % i for i in range(len(neg))]
+    neg['severity'] = neg.get("severity", "none")
+    neg['mode'] = neg.get("mode", "none")
+    neg['point_id'] = ["neg_%06d" % i for i in range(len(neg))]
 
     common = ["point_id", "label", "heading", "severity", "mode", "geometry"]
     for col in common:
@@ -165,6 +165,6 @@ def build_labeled_points(
 
     out = pd.concat([pos[common], neg[common]], ignore_index=True)
     out = gpd.GeoDataFrame(out, geometry="geometry", crs="EPSG:4326")
-    out["lat"] = out.geometry.y
-    out["lon"] = out.geometry.x
+    out['lat'] = out.geometry.y
+    out['lon'] = out.geometry.x
     return out

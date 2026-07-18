@@ -1,7 +1,8 @@
 """route_risk — edge 단위 사고 위험확률을 route(경로) 단위 위험도로 집계.
 
 PROJECT.md §4.5-3 에서 검토한 후보 중 **hazard-rate 기반 생존모델**을 기본(권장)으로
-채택하고, 비교용으로 mean/max/sum/count 베이스라인도 함께 제공한다(torch 불필요).
+채택하고, 비교용으로 mean/max/sum/count 베이스라인도 함께 제공한다
+(numpy/scipy/sklearn 기반, offline 학습 단계).
 
     route_risk = 1 - exp(-Σ h_i * L_i),   h_i = -ln(1 - p_i) / L_i
                = 1 - Π (1 - p_i)

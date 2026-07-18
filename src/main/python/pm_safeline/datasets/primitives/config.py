@@ -1,14 +1,13 @@
-"""수집·데이터셋 전역 설정.
+"""수집·데이터셋 기본값과 지역 레지스트리·경로 헬퍼.
 
-값은 대부분 파일럿(`docs/resources/pilot/pmrisk.py`)의 대전 중심부 설정과
-일치시키되, 이 패키지는 파일럿에 의존하지 않는 독립 모듈로 유지한다.
-환경변수로 민감정보(스트리트뷰 API 키)를 주입한다.
+독립 모듈(다른 패키지에 의존하지 않음)로 유지한다. 환경변수로 민감정보
+(스트리트뷰 API 키 등)를 주입한다.
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 # 대전시 전역 범위 (W, S, E, N) — 사고 좌표 '유효성 필터'용(대전 밖 좌표=데이터 오류 제외).
@@ -19,7 +18,7 @@ DAEJEON_BBOX: tuple[float, float, float, float] = (127.24, 36.17, 127.57, 36.51)
 METRIC_CRS = "EPSG:32652"
 WGS84 = "EPSG:4326"
 
-# 프로젝트 루트 = .../src/main/python/pm_safeline/utils/config.py 기준 5단계 상위
+# 프로젝트 루트 = .../src/main/python/pm_safeline/datasets/primitives/config.py 기준 5단계 상위
 _PROJECT_ROOT = Path(__file__).resolve().parents[6]
 
 
@@ -42,17 +41,8 @@ def _load_dotenv() -> None:
         os.environ.setdefault(key, value)
 
 
-# StreetViewConfig 등 아래 dataclass 기본값이 os.environ 를 읽기 전에 .env 를 먼저 로드.
+# 아래 헬퍼가 os.environ 을 읽기 전에 .env 를 먼저 로드.
 _load_dotenv()
-
-
-def _default_data_dir() -> Path:
-    """데이터 다운로드 루트. 환경변수 PM_DATA_DIR 우선, 없으면 프로젝트 루트의 data/.
-
-    CWD 와 무관하게 항상 프로젝트 루트의 data/ 로 저장된다(gitignore 대상).
-    """
-    env = os.environ.get("PM_DATA_DIR")
-    return Path(env) if env else _PROJECT_ROOT / "data"
 
 # TAAS 심각도 라벨 정규화 매핑
 SEVERITY_ORDER = ["경상", "중상", "사망"]
@@ -84,82 +74,70 @@ REGIONS: dict[str, Region] = {
                        (127.30, 36.45, 127.75, 36.90)),
 }
 
+# ---- 수집 기본값 ------------------------------------------------------------
 
-@dataclass(frozen=True)
-class StreetViewConfig:
-    """스트리트뷰 이미지 요청 파라미터.
+# 도로 위 지점 샘플링 간격(m) — §4.5 부가설계: 30~50m 고정간격 권장
+SAMPLE_INTERVAL_M = 40.0
+# negative:positive 비율
+NEGATIVE_RATIO = 3.0
+# exposure 매칭 허용 오차(분위수 bin 개수)
+EXPOSURE_BINS = 5
+# 재현성
+SEED = 42
 
-    provider: "google" | "naver" | "kakao" | "mock"
-      - google: Street View Static API (문서화된 REST, 헤딩/피치/fov 지원)
-      - naver : 로드뷰. 공개 정적 이미지 REST가 없어 ToS 확인 필요(§4.5-5).
-      - mock  : 네트워크 없이 파이프라인 검증용 플레이스홀더 이미지.
-    """
-
-    provider: str = os.environ.get("PM_SV_PROVIDER", "mock")
-    api_key: str | None = os.environ.get("PM_SV_API_KEY")
-    # 이미지 크기 (ViT 백본 입력 고려; 224 배수 여유)
-    width: int = 512
-    height: int = 512
-    fov: int = 90
-    pitch: int = 0
-    # 한 지점에서 여러 방위각으로 촬영(도로 구조를 넓게 포착). None이면 도로 진행방향만.
-    headings: tuple[int, ...] | None = None
-    # 초당 요청 상한(레이트리밋 + 캐시로 ToS/과금 보호)
-    requests_per_sec: float = 2.0
-
-
-@dataclass(frozen=True)
-class Config:
-    """패키지 전역 설정."""
-
-    bbox: tuple[float, float, float, float] = DAEJEON_BBOX
-    metric_crs: str = METRIC_CRS
-
-    # 수집 대상 지역(REGIONS 키). 전국 전이 목표 → 다지역 다양성 권장(예: daejeon,sejong,cheongju).
-    # 환경변수 PM_REGIONS="daejeon,sejong" 로도 지정 가능.
-    regions: tuple[str, ...] = field(
-        default_factory=lambda: tuple(
-            r.strip() for r in os.environ.get("PM_REGIONS", "daejeon").split(",") if r.strip()
-        )
-    )
-
-    # 데이터 루트. 기본은 저장소 상대 경로.
-    data_dir: Path = field(default_factory=lambda: _default_data_dir())
-
-    # 도로 위 지점 샘플링 간격(m) — §4.5 부가설계: 30~50m 고정간격 권장
-    sample_interval_m: float = 40.0
-    # negative:positive 비율
-    negative_ratio: float = 3.0
-    # exposure 매칭 허용 오차(분위수 bin 개수)
-    exposure_bins: int = 5
-
-    streetview: StreetViewConfig = field(default_factory=StreetViewConfig)
-
-    # 재현성
-    seed: int = 42
-
-    # ---- 파생 경로 --------------------------------------------------------
-    @property
-    def raw_dir(self) -> Path:
-        return self.data_dir / "raw"
-
-    @property
-    def images_dir(self) -> Path:
-        """torchvision ImageFolder 호환 루트: images/<class>/<id>.jpg"""
-        return self.data_dir / "streetview"
-
-    @property
-    def manifest_path(self) -> Path:
-        return self.data_dir / "manifest.csv"
-
-    @property
-    def points_path(self) -> Path:
-        """수집 대상 지점(사고+대조) GeoPackage."""
-        return self.data_dir / "sample_points.gpkg"
-
-    def ensure_dirs(self) -> None:
-        for p in (self.data_dir, self.raw_dir, self.images_dir):
-            p.mkdir(parents=True, exist_ok=True)
+# ---- 스트리트뷰 기본값 -------------------------------------------------------
+# 이미지 크기 (ViT 백본 입력 고려; 224 배수 여유)
+SV_WIDTH = 512
+SV_HEIGHT = 512
+SV_FOV = 90
+SV_PITCH = 0
+# 한 지점에서 여러 방위각으로 촬영(도로 구조를 넓게 포착). None이면 도로 진행방향만.
+SV_HEADINGS: tuple[int, ...] | None = None
+# 초당 요청 상한(레이트리밋 + 캐시로 ToS/과금 보호)
+SV_REQUESTS_PER_SEC = 2.0
 
 
-DEFAULT_CONFIG = Config()
+def default_regions() -> tuple[str, ...]:
+    """수집 대상 지역(REGIONS 키). 환경변수 PM_REGIONS="daejeon,sejong" 로 지정 가능."""
+    return tuple(r.strip() for r in os.environ.get("PM_REGIONS", "daejeon").split(",") if r.strip())
+
+
+def default_provider() -> str:
+    """스트리트뷰 provider 이름. 환경변수 PM_SV_PROVIDER 우선, 기본 "mock"."""
+    return os.environ.get("PM_SV_PROVIDER", "mock")
+
+
+def default_sv_api_key() -> str | None:
+    """스트리트뷰 API 키. 환경변수 PM_SV_API_KEY."""
+    return os.environ.get("PM_SV_API_KEY")
+
+
+def data_root(root: str | Path | None = None) -> Path:
+    """데이터 다운로드 루트. root 명시 시 그 경로, 아니면 env PM_DATA_DIR, 없으면 프로젝트 루트의 data/."""
+    if root is not None:
+        return Path(root)
+    env = os.environ.get("PM_DATA_DIR")
+    return Path(env) if env else _PROJECT_ROOT / "data"
+
+
+def raw_dir(root: str | Path | None = None) -> Path:
+    return data_root(root) / "raw"
+
+
+def images_dir(root: str | Path | None = None) -> Path:
+    """torchvision ImageFolder 호환 루트: images/<class>/<id>.jpg"""
+    return data_root(root) / "streetview"
+
+
+def manifest_path(root: str | Path | None = None) -> Path:
+    return data_root(root) / "manifest.csv"
+
+
+def points_path(root: str | Path | None = None) -> Path:
+    """수집 대상 지점(사고+대조) GeoPackage."""
+    return data_root(root) / "sample_points.gpkg"
+
+
+def ensure_dirs(root: str | Path | None = None) -> None:
+    for p in (data_root(root), raw_dir(root), images_dir(root)):
+        p.mkdir(parents=True, exist_ok=True)

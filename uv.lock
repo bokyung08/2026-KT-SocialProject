@@ -1807,7 +1807,7 @@ wheels = [
 [[package]]
 name = "pm-proj"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "contextily" },
     { name = "folium" },

@@ -1,7 +1,6 @@
 """PMRiskViT 설정 (HF-style config).
 
 teacher 위험도 모델(PROJECT.md §4.4 step 2)의 하이퍼파라미터를 담는 순수 dataclass.
-torch 를 임포트하지 않으므로 `import pm_safeline` 경로에서 torch 없이도 안전하게 로드된다.
 """
 
 from __future__ import annotations

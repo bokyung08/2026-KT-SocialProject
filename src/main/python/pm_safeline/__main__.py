@@ -1,54 +1,57 @@
-"""pmdata CLI.
+"""pm_safeline CLI.
 
 사용 예:
     # 네트워크 없이 파이프라인 검증(mock provider)
-    PM_SV_PROVIDER=mock python -m pmdata collect --limit 50
+    PM_SV_PROVIDER=mock python -m pm_safeline collect --limit 50
 
     # 실제 수집(Google Street View Static, 키 필요)
-    PM_SV_PROVIDER=google PM_SV_API_KEY=... python -m pmdata collect
+    PM_SV_PROVIDER=google PM_SV_API_KEY=... python -m pm_safeline collect
 
     # manifest 통계
-    python -m pmdata stats
+    python -m pm_safeline stats
 """
 
 from __future__ import annotations
 
 import argparse
 import os
-from .datasets.primitives.config import Config
+from pathlib import Path
+
+from .datasets.primitives.config import data_root, default_provider, manifest_path
 
 
-def _cfg_from_args(args) -> Config:
+def _apply_data_dir(args) -> Path | None:
     if args.data_dir:
         os.environ["PM_DATA_DIR"] = args.data_dir
-    # env 를 반영해 새 Config 생성
-    return Config()
+    return data_root()
 
 
 def cmd_collect(args) -> None:
     from .datasets.roadview import build_roadview_dataset
 
-    cfg = _cfg_from_args(args)
-    build_roadview_dataset(cfg, source=args.source, pm_only=not args.all_modes, limit=args.limit)
+    root = _apply_data_dir(args)
+    build_roadview_dataset(root, source=args.source, pm_only=not args.all_modes, limit=args.limit)
 
 
 def cmd_download(args) -> None:
     """KoROAD 다발지역 오픈API 만 받아 data/raw/ 에 캐시(수집/이미지 없이)."""
-    from .datasets.accidents import load_accidents
+    from .datasets.accidents import AccidentDataset
+    from .datasets.primitives.config import raw_dir
 
-    cfg = _cfg_from_args(args)
-    gdf = load_accidents(source="koroad", cfg=cfg, download=True, kind=args.kind)
-    print(f"[download] {len(gdf)}개 다발지역 -> {cfg.raw_dir}")
+    root = _apply_data_dir(args)
+    gdf = AccidentDataset(root=root, source="koroad", download=True, kind=args.kind).to_geodataframe()
+    print(f"[download] {len(gdf)}개 다발지역 -> {raw_dir(root)}")
 
 
 def cmd_stats(args) -> None:
     import pandas as pd
 
-    cfg = _cfg_from_args(args)
-    if not cfg.manifest_path.exists():
-        print(f"manifest 없음: {cfg.manifest_path}")
+    root = _apply_data_dir(args)
+    mpath = manifest_path(root)
+    if not mpath.exists():
+        print(f"manifest 없음: {mpath}")
         return
-    df = pd.read_csv(cfg.manifest_path)
+    df = pd.read_csv(mpath)
     print(f"이미지 {len(df)}장, 지점 {df['point_id'].nunique()}개")
     print(df["class"].value_counts().to_string())
     if "severity" in df:
@@ -57,22 +60,14 @@ def cmd_stats(args) -> None:
 
 
 def cmd_check(args) -> None:
-    """수집 없이 import/설정 sanity check (torch 불필요)."""
-    cfg = _cfg_from_args(args)
+    """수집 없이 import/설정 sanity check."""
+    root = _apply_data_dir(args)
     from .datasets.primitives import geo, negatives, streetview  # noqa: F401
-    from .datasets.accidents import load_accidents  # noqa: F401
+    from .datasets.accidents import AccidentDataset  # noqa: F401
     from .datasets.roadview import build_roadview_dataset  # noqa: F401
 
-    print("[check] 수집 모듈 import OK (torch 불필요)")
-    print(f"[check] bbox={cfg.bbox}  data_dir={cfg.data_dir}  provider={cfg.streetview.provider}")
-    try:
-        from .datasets import roadview  # noqa: F401
-        import importlib.util
-
-        has_torch = importlib.util.find_spec("torch") is not None
-        print(f"[check] roadview 모듈 import OK / torch 설치됨={has_torch}")
-    except Exception as e:  # noqa: BLE001
-        print(f"[check] roadview 모듈 경고: {e}")
+    print("[check] 수집 모듈 import OK")
+    print(f"[check] data_root={root}  provider={default_provider()}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -94,7 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("stats", help="manifest 통계 출력")
     s.set_defaults(func=cmd_stats)
 
-    k = sub.add_parser("check", help="import/설정 점검(torch 불필요)")
+    k = sub.add_parser("check", help="import/설정 점검")
     k.set_defaults(func=cmd_check)
     return p
 

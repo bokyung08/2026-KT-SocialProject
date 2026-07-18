@@ -1,13 +1,14 @@
 """OSM 도로망 로드 + 도로 위 고정간격 지점/방위각 생성.
 
 핵심 함수:
-    load_drive_edges(cfg)          -> GeoDataFrame(edge geometry, WGS84)
+    load_drive_edges(bbox)          -> GeoDataFrame(edge geometry, WGS84)
     sample_points_along_edges(...) -> GeoDataFrame(point, heading, edge_id)
     snap_points_to_edges(...)      -> 사고점을 최근접 edge에 스냅 + 방위각 부여
 
 방위각(heading)은 스트리트뷰 카메라가 도로를 바라보도록 edge 진행방향으로 계산한다.
-osmnx / geopandas / shapely 는 파일럿 환경에 이미 설치되어 있다(torch 불필요).
+osmnx / geopandas / shapely 를 사용한다.
 """
+
 
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from .config import Config, DEFAULT_CONFIG
+from .config import METRIC_CRS, SAMPLE_INTERVAL_M
 
 WGS84_STR = "EPSG:4326"
 
@@ -33,32 +34,37 @@ def _bearing_deg(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     return (math.degrees(math.atan2(x, y)) + 360.0) % 360.0
 
 
-def load_drive_graph(cfg: Config = DEFAULT_CONFIG):
-    """대전 bbox 의 주행 가능 도로망을 osmnx 로 받아 edges GeoDataFrame 반환.
+def load_drive_graph(bbox: tuple[float, float, float, float]):
+    """주어진 bbox 의 주행 가능 도로망을 osmnx 로 받아 edges GeoDataFrame 반환.
 
     자전거/PM 관점이지만 teacher 학습용 이미지 수집은 '차도 포함' 넓은 도로망을
     대상으로 한다(사고는 차도 합류 지점에서도 발생). network_type='drive'.
     """
     import osmnx as ox
 
-    w, s, e, n = cfg.bbox
+    w, s, e, n = bbox
     # osmnx 2.x: bbox 는 (left, bottom, right, top) 튜플
     graph = ox.graph_from_bbox(bbox=(w, s, e, n), network_type="drive")
     return graph
 
 
-def load_drive_edges(cfg: Config = DEFAULT_CONFIG) -> "gpd.GeoDataFrame":
+def load_drive_edges(
+    bbox: tuple[float, float, float, float], *, metric_crs: str = METRIC_CRS
+) -> "gpd.GeoDataFrame":
     """edges GeoDataFrame(WGS84, geometry=LineString) 반환."""
     import osmnx as ox
 
-    graph = load_drive_graph(cfg)
+    graph = load_drive_graph(bbox)
     edges = ox.graph_to_gdfs(graph, nodes=False, edges=True)
     edges = edges.reset_index()  # u, v, key 를 컬럼으로
-    return edges.to_crs(cfg.metric_crs)
+    return edges.to_crs(metric_crs)
 
 
 def sample_points_along_edges(
-    edges: "gpd.GeoDataFrame", cfg: Config = DEFAULT_CONFIG
+    edges: "gpd.GeoDataFrame",
+    *,
+    sample_interval_m: float = SAMPLE_INTERVAL_M,
+    metric_crs: str = METRIC_CRS,
 ) -> "gpd.GeoDataFrame":
     """각 edge 를 따라 `sample_interval_m` 간격으로 지점 생성.
 
@@ -66,10 +72,9 @@ def sample_points_along_edges(
     - edge 를 미터 CRS 에서 등간격 보간 -> 각 지점의 접선 방위각 계산.
     """
     import geopandas as gpd
-    from shapely.geometry import Point
 
-    step = cfg.sample_interval_m
-    edges_m = edges if edges.crs and edges.crs.to_string() == cfg.metric_crs else edges.to_crs(cfg.metric_crs)
+    step = sample_interval_m
+    edges_m = edges if edges.crs and edges.crs.to_string() == metric_crs else edges.to_crs(metric_crs)
 
     rows: list[dict] = []
     for idx, row in edges_m.iterrows():
@@ -95,7 +100,7 @@ def sample_points_along_edges(
                 }
             )
 
-    out = gpd.GeoDataFrame(rows, geometry="geometry", crs=cfg.metric_crs).to_crs(WGS84_STR)
+    out = gpd.GeoDataFrame(rows, geometry="geometry", crs=metric_crs).to_crs(WGS84_STR)
     out["heading"] = out.pop("heading_xy").round(1)
     return out
 
@@ -108,7 +113,10 @@ def _norm_highway(v) -> str:
 
 
 def snap_accidents_to_edges(
-    accidents: "gpd.GeoDataFrame", edges: "gpd.GeoDataFrame", cfg: Config = DEFAULT_CONFIG
+    accidents: "gpd.GeoDataFrame",
+    edges: "gpd.GeoDataFrame",
+    *,
+    metric_crs: str = METRIC_CRS,
 ) -> "gpd.GeoDataFrame":
     """사고 지점을 최근접 edge 로 스냅하고 도로 방위각을 부여.
 
@@ -116,8 +124,8 @@ def snap_accidents_to_edges(
     """
     import geopandas as gpd
 
-    acc_m = accidents.to_crs(cfg.metric_crs)
-    edges_m = edges.to_crs(cfg.metric_crs)
+    acc_m = accidents.to_crs(metric_crs)
+    edges_m = edges.to_crs(metric_crs)
 
     joined = gpd.sjoin_nearest(acc_m, edges_m, how="left", distance_col="snap_dist_m")
     joined = joined[~joined.index.duplicated(keep="first")].copy()

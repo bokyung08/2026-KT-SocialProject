@@ -4,11 +4,7 @@
 (ZenSVI ViT 의 대체/부트스트랩)이며, 데이터 희소성(§4.5-1)을 고려해 기본값은
 **backbone 고정 + 소형 헤드만 학습**(linear probe)이다.
 
-이 모듈은 torch/torchvision 을 모듈 최상단에서 임포트한다(HF 관례). 따라서
-`from pm_safeline.models.pm_risk_vit.modeling_pm_risk_vit import ...` 를 실제로
-평가하는 순간에는 torch 가 설치돼 있어야 한다. `pm_safeline` 패키지 자체나
-`models/__init__.py` 는 이 파일을 eager 하게 임포트하지 않으므로 torch 미설치 환경에서도
-`import pm_safeline` 은 안전하다.
+이 모듈은 torch/torchvision 을 모듈 최상단에서 임포트한다(HF 관례).
 """
 
 from __future__ import annotations

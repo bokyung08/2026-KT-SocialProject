@@ -1,9 +1,6 @@
 """teacher(PMRiskViT) 학습 루프 (PROJECT.md §4.4~§4.5).
 
-이 모듈은 torch 를 모듈 최상단에서 임포트한다(모델링 파일과 동일 관례). 따라서
-`from pm_safeline.utils.training import ...` 를 실제로 평가하는 순간에는 torch/
-scikit-learn 이 설치돼 있어야 한다. `pm_safeline.utils` 패키지 자체는 이 파일을
-eager 하게 임포트하지 않으므로 torch 미설치 환경에서도 `import pm_safeline` 은 안전하다.
+이 모듈은 torch 를 모듈 최상단에서 임포트한다(모델링 파일과 동일 관례).
 
 제공 기능:
     TrainConfig       : 학습 하이퍼파라미터.

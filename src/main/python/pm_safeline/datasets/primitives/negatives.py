@@ -17,17 +17,17 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from .config import Config, DEFAULT_CONFIG
+from .config import EXPOSURE_BINS, METRIC_CRS, NEGATIVE_RATIO, SEED
 
 if TYPE_CHECKING:
     import geopandas as gpd
 
 # 도로 위계 -> 대리 exposure 순위(클수록 통행량 많다고 가정)
 _HIGHWAY_RANK = {
-    "motorway": 6, "trunk": 6, "primary": 5, "primary_link": 5,
-    "secondary": 4, "secondary_link": 4, "tertiary": 3, "tertiary_link": 3,
-    "residential": 2, "living_street": 2, "unclassified": 2,
-    "service": 1, "cycleway": 1, "footway": 1, "path": 1, "pedestrian": 1,
+    'motorway': 6, 'trunk': 6, 'primary': 5, 'primary_link': 5,
+    'secondary': 4, 'secondary_link': 4, 'tertiary': 3, 'tertiary_link': 3,
+    'residential': 2, 'living_street': 2, 'unclassified': 2,
+    'service': 1, 'cycleway': 1, 'footway': 1, 'path': 1, 'pedestrian': 1,
 }
 
 
@@ -40,10 +40,13 @@ def _exposure_score(highway: str, override: float | None = None) -> float:
 def sample_negatives(
     accidents: "gpd.GeoDataFrame",
     candidate_points: "gpd.GeoDataFrame",
-    cfg: Config = DEFAULT_CONFIG,
     *,
     min_dist_m: float = 60.0,
     exposure_col: str | None = None,
+    exposure_bins: int = EXPOSURE_BINS,
+    negative_ratio: float = NEGATIVE_RATIO,
+    seed: int = SEED,
+    metric_crs: str = METRIC_CRS,
 ) -> "gpd.GeoDataFrame":
     """사고 지점의 exposure 분포에 맞춰 candidate_points 에서 negative 추출.
 
@@ -55,10 +58,10 @@ def sample_negatives(
 
     반환: candidate_points 부분집합 + label=0, exposure_bin 컬럼.
     """
-    rng = np.random.default_rng(cfg.seed)
+    rng = np.random.default_rng(seed)
 
     # 1) 사고 인접 완충대 제거 (positive 근처를 negative 로 오분류 방지)
-    cand = _drop_near_accidents(candidate_points, accidents, cfg, min_dist_m)
+    cand = _drop_near_accidents(candidate_points, accidents, min_dist_m, metric_crs=metric_crs)
     if cand.empty:
         raise ValueError("완충대 제거 후 negative 후보가 없습니다. min_dist_m 를 줄이세요.")
 
@@ -73,17 +76,20 @@ def sample_negatives(
     ).to_numpy()
 
     # 3) 사고 exposure 분포를 분위수 bin 으로 -> bin 별 목표 개수 산정
-    edges = _quantile_edges(acc_exp, cfg.exposure_bins)
-    acc_bin = np.clip(np.digitize(acc_exp, edges[1:-1]), 0, cfg.exposure_bins - 1)
-    cand_bin = np.clip(np.digitize(cand_exp, edges[1:-1]), 0, cfg.exposure_bins - 1)
-
+    # 소표본 가드: 사고가 적으면 분위수 bin 경계가 붕괴해 exposure 매칭이 무의미해진다
+    # (세종 3건 등). 사고 수에 맞춰 bin 수를 낮춘다(최소 1). 고속도로 제외는 geo 필터가 담당.
     n_pos = len(accidents)
-    target_total = int(round(n_pos * cfg.negative_ratio))
-    bin_frac = np.bincount(acc_bin, minlength=cfg.exposure_bins) / max(1, n_pos)
+    exposure_bins = max(1, min(exposure_bins, n_pos // 5))
+    edges = _quantile_edges(acc_exp, exposure_bins)
+    acc_bin = np.clip(np.digitize(acc_exp, edges[1:-1]), 0, exposure_bins - 1)
+    cand_bin = np.clip(np.digitize(cand_exp, edges[1:-1]), 0, exposure_bins - 1)
+
+    target_total = int(round(n_pos * negative_ratio))
+    bin_frac = np.bincount(acc_bin, minlength=exposure_bins) / max(1, n_pos)
 
     chosen_idx: list[int] = []
     cand_reset = cand.reset_index(drop=True)
-    for b in range(cfg.exposure_bins):
+    for b in range(exposure_bins):
         pool = np.where(cand_bin == b)[0]
         if pool.size == 0:
             continue
@@ -94,8 +100,8 @@ def sample_negatives(
         chosen_idx.extend(rng.choice(pool, size=want, replace=False).tolist())
 
     neg = cand_reset.iloc[sorted(set(chosen_idx))].copy()
-    neg["label"] = 0
-    neg["exposure_bin"] = np.clip(
+    neg['label'] = 0
+    neg['exposure_bin'] = np.clip(
         np.digitize(
             neg.apply(
                 lambda r: _exposure_score(r.get("highway"), r.get(exposure_col) if exposure_col else None),
@@ -104,7 +110,7 @@ def sample_negatives(
             edges[1:-1],
         ),
         0,
-        cfg.exposure_bins - 1,
+        exposure_bins - 1,
     )
     return neg.reset_index(drop=True)
 
@@ -119,13 +125,14 @@ def _quantile_edges(values: np.ndarray, bins: int) -> np.ndarray:
 def _drop_near_accidents(
     candidates: "gpd.GeoDataFrame",
     accidents: "gpd.GeoDataFrame",
-    cfg: Config,
     min_dist_m: float,
+    *,
+    metric_crs: str = METRIC_CRS,
 ) -> "gpd.GeoDataFrame":
     import geopandas as gpd
 
-    cand_m = candidates.to_crs(cfg.metric_crs)
-    acc_m = accidents.to_crs(cfg.metric_crs)
+    cand_m = candidates.to_crs(metric_crs)
+    acc_m = accidents.to_crs(metric_crs)
     buffer = acc_m.geometry.buffer(min_dist_m).union_all() if hasattr(
         acc_m.geometry, "union_all"
     ) else acc_m.geometry.buffer(min_dist_m).unary_union
@@ -144,13 +151,13 @@ def build_labeled_points(
     import geopandas as gpd
 
     pos = accidents.copy()
-    pos["label"] = 1
-    pos["point_id"] = ["acc_%06d" % i for i in range(len(pos))]
+    pos['label'] = 1
+    pos['point_id'] = ["acc_%06d" % i for i in range(len(pos))]
 
     neg = negatives.copy()
-    neg["severity"] = neg.get("severity", "none")
-    neg["mode"] = neg.get("mode", "none")
-    neg["point_id"] = ["neg_%06d" % i for i in range(len(neg))]
+    neg['severity'] = neg.get("severity", "none")
+    neg['mode'] = neg.get("mode", "none")
+    neg['point_id'] = ["neg_%06d" % i for i in range(len(neg))]
 
     common = ["point_id", "label", "heading", "severity", "mode", "geometry"]
     for col in common:
@@ -161,6 +168,6 @@ def build_labeled_points(
 
     out = pd.concat([pos[common], neg[common]], ignore_index=True)
     out = gpd.GeoDataFrame(out, geometry="geometry", crs="EPSG:4326")
-    out["lat"] = out.geometry.y
-    out["lon"] = out.geometry.x
+    out['lat'] = out.geometry.y
+    out['lon'] = out.geometry.x
     return out

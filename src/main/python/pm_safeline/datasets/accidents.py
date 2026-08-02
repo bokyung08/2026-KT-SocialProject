@@ -418,20 +418,31 @@ def _load_accident_gdf(
 
 
 def _drop_out_of_region(gdf, *, regions: tuple[str, ...] | None = None):
-    """선택 지역(regions) 범위 밖 좌표 = 데이터 입력 오류로 보고 제외.
+    """좌표 오류 제외 — **각 지점을 자기 region 의 bbox 로만** 판정.
 
-    사고 지점을 임의로 자르는 게 아니라, '대전 데이터인데 좌표가 서울' 같은 명백한
-    좌표 오류만 걸러낸다. 여러 지역이면 각 지역 bbox 의 합집합으로 판정.
+    '대전 데이터인데 좌표가 서울' 같은 오류를 잡으려면 전 지역 bbox 합집합으로 판정하면
+    안 된다(서울 bbox 에 걸려 안 걸러짐). region 컬럼이 있으면 행마다 해당 region 의 bbox
+    로만 검사하고, 없으면 선택 지역 합집합으로 폴백한다. REGIONS 에 없는 region 은 통과.
     """
-    region_names = regions or default_regions()
-    bboxes = [REGIONS[r].bbox for r in region_names if r in REGIONS]
-    inb = None
-    for w, s, e, n in bboxes:
-        cond = gdf['lat'].between(s, n) & gdf['lon'].between(w, e)
-        inb = cond if inb is None else (inb | cond)
+    if 'region' in gdf.columns:
+        inb = pd.Series(False, index=gdf.index)
+        for rname, region in REGIONS.items():
+            w, s, e, n = region.bbox
+            inb |= (gdf['region'] == rname) & gdf['lat'].between(s, n) & gdf['lon'].between(w, e)
+        # REGIONS 에 없는 미지 region 은 자르지 않는다.
+        inb |= ~gdf['region'].isin(REGIONS)
+    else:
+        region_names = regions or default_regions()
+        inb = None
+        for r in region_names:
+            if r not in REGIONS:
+                continue
+            w, s, e, n = REGIONS[r].bbox
+            cond = gdf['lat'].between(s, n) & gdf['lon'].between(w, e)
+            inb = cond if inb is None else (inb | cond)
     dropped = int((~inb).sum())
     if dropped:
-        print(f"[accidents] 선택 지역 범위 밖 좌표(오류 의심) {dropped}건 제외")
+        print(f"[accidents] region bbox 밖 좌표(오류 의심) {dropped}건 제외")
     return gdf[inb].reset_index(drop=True)
 
 

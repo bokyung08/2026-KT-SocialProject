@@ -4,7 +4,7 @@
 
 제공 기능:
     TrainConfig       : 학습 하이퍼파라미터.
-    train_teacher()   : BCEWithLogitsLoss(+pos_weight) + AdamW + early stopping(valid AUC).
+    train_teacher()   : BCEWithLogitsLoss(+pos_weight, +severity 샘플가중) + AdamW + early stopping(valid AUC).
     evaluate()        : 데이터셋에 대한 loss/AUC/AP 산출.
     cross_validate()  : StratifiedGroupKFold(kfold_indices) 기반 teacher 신뢰도 추정(§4.5-1).
     calibrate()       : temperature scaling(§4.5 과신 보정).
@@ -77,9 +77,11 @@ def _collect_logits_targets(model: nn.Module, ds: Dataset, cfg: TrainConfig):
 def evaluate(model: nn.Module, ds: Dataset, cfg: TrainConfig, *, pos_weight=None) -> dict:
     """ds 전체에 대한 loss/ROC-AUC/AP(average precision) 산출."""
     model = model.to(cfg.device)
-    logits, targets = _collect_logits_targets(model, ds, cfg)
+    logits, targets = _collect_logits_targets(model, ds, cfg)  # CPU 텐서
 
-    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    # logits/targets 는 CPU 이므로 pos_weight 도 CPU 로 맞춘다(device 불일치 방지).
+    pw = pos_weight.detach().cpu() if isinstance(pos_weight, torch.Tensor) else pos_weight
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pw)
     loss = loss_fn(logits, targets).item()
 
     targets_np = targets.numpy()
@@ -117,7 +119,8 @@ def train_teacher(
     if pos_weight is not None and not isinstance(pos_weight, torch.Tensor):
         pos_weight = torch.tensor(float(pos_weight))
     pos_weight_dev = pos_weight.to(cfg.device) if pos_weight is not None else None
-    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight_dev)
+    # 배치에 per-sample 가중치(severity)가 실려오면 곱해야 하므로 reduction='none'.
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight_dev, reduction="none")
 
     optimizer = torch.optim.AdamW(
         model.trainable_parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
@@ -136,13 +139,18 @@ def train_teacher(
         n_samples = 0
         for batch in train_loader:
             x, y = _unpack_batch(batch)
+            # 3번째 원소가 텐서면 per-sample 가중치(severity), dict 면 meta 이므로 무시.
+            w = batch[2] if len(batch) > 2 and torch.is_tensor(batch[2]) else None
             x = x.to(cfg.device)
             y = y.to(cfg.device).float()
 
             optimizer.zero_grad(set_to_none=True)
             with torch.autocast(device_type=cfg.device, enabled=(cfg.amp and cfg.device == "cuda")):
                 logits = model(x).squeeze(-1)
-                loss = loss_fn(logits, y)
+                per_sample = loss_fn(logits, y)  # reduction='none' -> [B]
+                if w is not None:
+                    per_sample = per_sample * w.to(cfg.device)
+                loss = per_sample.mean()
 
             if scaler.is_enabled():
                 scaler.scale(loss).backward()
@@ -156,6 +164,7 @@ def train_teacher(
             n_samples += x.size(0)
 
         train_loss = running_loss / max(1, n_samples)
+        # train AUC 는 매 epoch 평가하면 로딩 비용이 커지므로 학습 후 best 모델로 1번만 계산한다.
         valid_metrics = evaluate(model, valid_ds, cfg, pos_weight=pos_weight_dev)
 
         history['train_loss'].append(train_loss)
@@ -181,11 +190,16 @@ def train_teacher(
                 print(f"[train_teacher] early stopping (patience={cfg.patience}) @ epoch {epoch + 1}")
                 break
 
+    # best 모델로 train AUC 를 1회만 계산(train/valid 둘 다 리포트하되 매 epoch 비용은 회피).
+    model.load_state_dict(best_state)
+    train_auc = evaluate(model, train_ds, cfg, pos_weight=pos_weight_dev)['auc']
+
     return {
         'history': history,
         'best_state': best_state,
         'best_epoch': best_epoch,
         'best_auc': best_auc,
+        'train_auc': train_auc,
     }
 
 

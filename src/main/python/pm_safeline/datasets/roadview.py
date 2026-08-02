@@ -249,6 +249,7 @@ class PMRoadviewDataset(Dataset):
         *,
         target_key: str = "label",
         return_meta: bool = False,
+        severity_weights: dict[str, float] | None = None,
         source: str = "koroad",
         pm_only: bool = True,
         limit: int | None = None,
@@ -267,9 +268,24 @@ class PMRoadviewDataset(Dataset):
         self.target_transform = target_transform
         self.target_key = target_key
         self.return_meta = return_meta
+        self.severity_weights = severity_weights
 
         if target_key not in self.frame.columns:
             raise KeyError(f"target_key '{target_key}' 가 manifest 컬럼에 없습니다: {list(self.frame.columns)}")
+
+        # severity-weighted BCE 용 지점별 샘플 가중치(사고 심각도 반영, 대조=1.0).
+        self._sample_weight = self._compute_sample_weights(severity_weights)
+
+    def _compute_sample_weights(self, severity_weights: dict[str, float] | None):
+        """label==1(사고)은 심각도별 가중치, label==0(대조)은 1.0. None 이면 전부 1.0."""
+        labels = self.frame['label'].to_numpy()
+        if not severity_weights:
+            return [1.0] * len(labels)
+        sev = self.frame['severity'].astype(str).to_numpy()
+        return [
+            float(severity_weights.get(sev[i], 1.0)) if labels[i] == 1 else 1.0
+            for i in range(len(labels))
+        ]
 
     # torchvision 관례 -------------------------------------------------------
     def __len__(self) -> int:
@@ -287,6 +303,12 @@ class PMRoadviewDataset(Dataset):
             image = self.transform(image)
         if self.target_transform is not None:
             target = self.target_transform(target)
+
+        # severity-weighted 학습 시 3번째 원소로 샘플 가중치(텐서) 반환.
+        # (meta 는 dict, weight 는 텐서라 학습 루프에서 타입으로 구분한다.)
+        if self.severity_weights is not None:
+            weight = torch.tensor(self._sample_weight[index], dtype=torch.float32)
+            return image, target, weight
 
         if self.return_meta:
             meta = {
@@ -331,24 +353,20 @@ def image_folder(root: str | Path | None = None, transform: Callable | None = No
     return datasets.ImageFolder(str(img_dir), transform=transform)
 
 
-def default_transform(train: bool = True):
-    """ZenSVI/ViT 백본(§4.4)에 맞춘 기본 전처리(ImageNet 정규화, 224)."""
+def default_transform(train: bool = True, image_size: int = 384):
+    """ZenSVI perception teacher 와 동일한 전처리(ImageNet 정규화, 기본 384).
+
+    ZenSVI ClassifierPerceptionViT 는 Resize((384,384)) + ToTensor + ImageNet Normalize
+    (CenterCrop 없음)를 쓴다. train 은 좌우 반전 증강만 추가한다.
+    """
     from torchvision import transforms
 
     norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ops = [transforms.Resize((image_size, image_size))]
     if train:
-        return transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.RandomCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            norm,
-        ])
-    return transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        norm,
-    ])
+        ops.append(transforms.RandomHorizontalFlip())
+    ops += [transforms.ToTensor(), norm]
+    return transforms.Compose(ops)
 
 
 # --------------------------------------------------------------------------- #
@@ -418,6 +436,10 @@ def kfold_indices(data, n_splits: int = 5, seed: int = 42,
     return [(tr.tolist(), va.tolist()) for tr, va in sgkf.split(idx, y, groups)]
 
 
+# severity-weighted BCE 기본 가중치(사고 심각도 -> 양성 손실 배수). 대조(label=0)는 1.0.
+DEFAULT_SEVERITY_WEIGHTS: dict[str, float] = {"경상": 1.0, "중상": 2.0, "사망": 3.0}
+
+
 def make_train_valid(
     root: str | Path | None = None,
     *,
@@ -427,18 +449,21 @@ def make_train_valid(
     valid_transform: Callable | None = None,
     target_key: str = "label",
     return_meta: bool = False,
+    severity_weights: dict[str, float] | None = None,
 ):
     """학습에 바로 쓸 (train_subset, valid_subset) 반환.
 
     train/valid 는 서로 다른 transform 을 갖는다(train=증강, valid=결정적). 내부적으로
     같은 manifest 로 두 Dataset 을 만들고 [split_indices] 로 나눈 뒤 Subset 으로 감싼다.
+    severity_weights 는 **학습셋에만** 적용한다(valid 는 순수 지표 산출용).
     """
     from torch.utils.data import Subset
 
     tr_t = train_transform if train_transform is not None else default_transform(train=True)
     va_t = valid_transform if valid_transform is not None else default_transform(train=False)
 
-    train_ds = PMRoadviewDataset(root, transform=tr_t, target_key=target_key, return_meta=return_meta)
+    train_ds = PMRoadviewDataset(root, transform=tr_t, target_key=target_key,
+                                 severity_weights=severity_weights)
     valid_ds = PMRoadviewDataset(root, transform=va_t, target_key=target_key, return_meta=return_meta)
 
     train_idx, valid_idx = split_indices(train_ds.frame, valid_frac=valid_frac, seed=seed)

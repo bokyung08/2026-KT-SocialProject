@@ -250,3 +250,4 @@ cache/
 /docs/.swagger-codegen/
 /docs/.swagger-codegen-ignore
 
+/data-expanded/

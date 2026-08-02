@@ -27,7 +27,7 @@ import torch
 from torch.utils.data import Dataset
 from urllib.parse import unquote
 
-from .primitives.config import default_regions, raw_dir, ensure_dirs, REGIONS
+from .primitives.config import default_regions, raw_dir, ensure_dirs, REGIONS, METRIC_CRS
 
 if TYPE_CHECKING:
     import geopandas as gpd
@@ -390,11 +390,14 @@ def _load_accident_gdf(
     regions: tuple[str, ...] | None = None,
     download: bool = True,
     pm_only: bool = True,
+    dedup: bool = True,
+    dedup_dist_m: float = 40.0,
     **kw,
 ) -> "gpd.GeoDataFrame":
     """사고 지점을 표준 스키마 GeoDataFrame 으로 로드.
 
     download=True 면 소스에서 받아 `data/raw` 에 캐시, False 면 이미 받아둔 캐시를 읽는다.
+    dedup=True 면 연도별 반복(공간 중복) 지점을 dedup_dist_m 이내에서 병합한다(누수 방지).
     """
     if source == "koroad":
         if download:
@@ -414,7 +417,63 @@ def _load_accident_gdf(
     else:
         raise ValueError(f"알 수 없는 source: {source} (koroad|taas)")
     gdf = _drop_out_of_region(gdf, regions=regions)
+    if dedup:
+        gdf = _dedup_accidents(gdf, min_dist_m=dedup_dist_m)
     return _validate(gdf)
+
+
+def _dedup_accidents(gdf, *, min_dist_m: float = 40.0, metric_crs: str = METRIC_CRS):
+    """연도별로 반복되는 같은 지점(공간 중복)을 병합해 유니크 지점만 남긴다.
+
+    KoROAD 다발지역은 연도별 스냅샷이라 같은 hotspot 이 여러 해 반복 등장한다. 이를 그대로
+    쓰면 같은 장소가 train/valid 에 나뉘어 누수가 된다. min_dist_m 이내(같은 region)를 한
+    지점으로 묶고, 대표는 사고건수(occrrnc_cnt) 최대 행, severity 는 최악(사망>중상>경상)으로.
+    """
+    import geopandas as gpd
+    from scipy.spatial import cKDTree
+
+    if len(gdf) < 2:
+        return gdf
+    g = gdf.to_crs(metric_crs)
+    xy = np.c_[g.geometry.x.to_numpy(), g.geometry.y.to_numpy()]
+    parent = list(range(len(gdf)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    regions_arr = gdf['region'].to_numpy() if 'region' in gdf.columns else None
+    for a, b in cKDTree(xy).query_pairs(min_dist_m):
+        if regions_arr is not None and regions_arr[a] != regions_arr[b]:
+            continue  # 지역이 다르면 병합하지 않음
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    clusters: dict[int, list[int]] = {}
+    for i in range(len(gdf)):
+        clusters.setdefault(find(i), []).append(i)
+
+    sev_rank = {s: r for r, s in enumerate(SEVERITY_LEVELS)}  # 경상0 중상1 사망2
+    keep = []
+    for members in clusters.values():
+        sub = gdf.iloc[members]
+        if 'occrrnc_cnt' in sub.columns:
+            counts = sub['occrrnc_cnt'].astype(float).fillna(0).to_numpy()
+            rep = gdf.iloc[members[int(counts.argmax())]].copy()
+        else:
+            rep = sub.iloc[0].copy()
+        rep['severity'] = max(sub['severity'].astype(str), key=lambda s: sev_rank.get(s, 0))
+        keep.append(rep)
+
+    out = gpd.GeoDataFrame(keep, geometry='geometry', crs=gdf.crs).reset_index(drop=True)
+    out['accident_id'] = range(1, len(out) + 1)
+    n_merged = len(gdf) - len(out)
+    if n_merged:
+        print(f"[accidents] 공간 중복 병합(dedup {min_dist_m:.0f}m): {len(gdf)} -> {len(out)} (-{n_merged})")
+    return out
 
 
 def _drop_out_of_region(gdf, *, regions: tuple[str, ...] | None = None):

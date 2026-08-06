@@ -3,6 +3,7 @@ ktor:
     port: 8080
   application:
     modules:
+      - kt.dinjae.pm_safeline.plugins.CorsKt.configureCors
       - kt.dinjae.pm_safeline.plugins.SerializationKt.configureSerialization
       - kt.dinjae.pm_safeline.plugins.StatusPagesKt.configureStatusPages
       - kt.dinjae.pm_safeline.HttpKt.configureHttp

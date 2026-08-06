@@ -246,6 +246,20 @@ trainer_output/
 cache/
 /data/
 
+# Flutter frontend sources (the generic Python `lib/` rule above would hide them)
+!frontend/
+!frontend/pm_safeline_flutter/
+!frontend/pm_safeline_flutter/lib/
+!frontend/pm_safeline_flutter/lib/**
+!frontend/pm_safeline_flutter/web/
+!frontend/pm_safeline_flutter/web/**
+!frontend/pm_safeline_flutter/android/
+!frontend/pm_safeline_flutter/android/**
+!frontend/pm_safeline_flutter/ios/
+!frontend/pm_safeline_flutter/ios/**
+frontend/pm_safeline_flutter/.dart_tool/
+frontend/pm_safeline_flutter/.flutter-plugins*
+
 # openAPI(swagger) codegen build artifacts
 /docs/.swagger-codegen/
 /docs/.swagger-codegen-ignore

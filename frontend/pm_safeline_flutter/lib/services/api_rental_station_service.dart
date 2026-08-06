@@ -14,7 +14,7 @@ class ApiRentalStationService implements RentalStationService {
     String? baseUrl,
     this.timeout = const Duration(seconds: 10),
   }) : _client = client ?? http.Client(),
-       _baseUrl = baseUrl ?? ApiConfig.baseUrl;
+       _baseUrl = ApiConfig.normalizeBaseUrl(baseUrl ?? ApiConfig.baseUrl);
 
   final http.Client _client;
   final String _baseUrl;
@@ -22,8 +22,7 @@ class ApiRentalStationService implements RentalStationService {
 
   @override
   Future<List<RentalStation>> fetchStations() async {
-    final normalizedBaseUrl = _baseUrl.replaceFirst(RegExp(r'/+$'), '');
-    final uri = Uri.parse('$normalizedBaseUrl/tashu/stations');
+    final uri = ApiConfig.apiUri('/tashu/stations', baseUrl: _baseUrl);
 
     try {
       final response = await _client

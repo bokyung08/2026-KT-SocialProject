@@ -2,8 +2,7 @@
     <!-- Flutter debug tooling and local Ktor development server access. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Development only: Android Emulator reaches the host Ktor server over
-         cleartext HTTP at http://10.0.2.2:8080. The release manifest does not
-         enable cleartext traffic. -->
+    <!-- Development only: allow an explicitly configured local Ktor server
+         over cleartext HTTP. The release manifest does not enable it. -->
     <application android:usesCleartextTraffic="true" />
 </manifest>

@@ -19,7 +19,7 @@ flutter pub get
 flutter run -d chrome --dart-define=USE_MOCK=true
 ```
 
-기본값은 `USE_MOCK=true`입니다. `API_BASE_URL`을 `dart-define`으로 전달하면 해당 값이 항상 최우선입니다. 값을 생략하면 Web·Windows/Desktop은 `http://localhost:8080`, Android는 에뮬레이터 기준 `http://10.0.2.2:8080`을 사용합니다.
+기본값은 `USE_MOCK=true`입니다. `API_BASE_URL`을 `dart-define`으로 전달하면 해당 값이 항상 최우선입니다. API 모드에서 값을 생략하면 Web은 현재 페이지의 origin을 사용하므로 Ktor와 같은 서버에서 배포할 때 별도 주소 설정이 필요 없습니다. Android·Windows 등 Web이 아닌 환경에서는 반드시 `API_BASE_URL`을 전달해야 합니다.
 
 실제 Ktor API에 연결하려면 다음과 같이 실행합니다.
 

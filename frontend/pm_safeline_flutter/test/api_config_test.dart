@@ -3,44 +3,88 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pm_safeline_flutter/config/api_config.dart';
 
 void main() {
-  test('dart-define API_BASE_URL 값이 플랫폼 기본값보다 우선한다', () {
+  const localWebBaseUrl =
+      'http://localhost'
+      ':8080';
+  const androidEmulatorBaseUrl =
+      'http://10.0.2.2'
+      ':8080';
+  const deployedOrigin =
+      'http://cuws.duckdns.org'
+      ':8080';
+
+  test('dart-define API_BASE_URL 값이 현재 origin보다 우선한다', () {
     expect(
       ApiConfig.resolveBaseUrl(
-        definedValue: 'http://192.168.0.10:8080',
-        isWeb: false,
+        definedValue: '$localWebBaseUrl/',
+        isWeb: true,
         platform: TargetPlatform.android,
+        currentOrigin: deployedOrigin,
       ),
-      'http://192.168.0.10:8080',
+      localWebBaseUrl,
     );
   });
 
-  test('API_BASE_URL 미지정 시 Web과 Desktop은 localhost를 사용한다', () {
+  test('Web은 API_BASE_URL 미지정 시 현재 origin을 사용한다', () {
     expect(
       ApiConfig.resolveBaseUrl(
         definedValue: '',
         isWeb: true,
         platform: TargetPlatform.android,
+        currentOrigin: '$deployedOrigin/',
       ),
-      'http://localhost:8080',
+      deployedOrigin,
     );
+  });
+
+  test('Android는 전달된 API_BASE_URL을 사용한다', () {
     expect(
       ApiConfig.resolveBaseUrl(
+        definedValue: androidEmulatorBaseUrl,
+        isWeb: false,
+        platform: TargetPlatform.android,
+      ),
+      androidEmulatorBaseUrl,
+    );
+  });
+
+  test('Web이 아닌 플랫폼에서 API_BASE_URL 미지정 시 명확히 실패한다', () {
+    expect(
+      () => ApiConfig.resolveBaseUrl(
         definedValue: '',
         isWeb: false,
         platform: TargetPlatform.windows,
       ),
-      'http://localhost:8080',
+      throwsA(isA<StateError>()),
     );
   });
 
-  test('API_BASE_URL 미지정 Android는 Emulator 호스트 주소를 사용한다', () {
+  test('URL 끝의 슬래시를 제거하고 API 경로를 한 번만 연결한다', () {
     expect(
-      ApiConfig.resolveBaseUrl(
-        definedValue: '',
+      ApiConfig.apiUri('/route', baseUrl: '$localWebBaseUrl///').toString(),
+      '$localWebBaseUrl/route',
+    );
+    expect(
+      ApiConfig.apiUri('health', baseUrl: '$localWebBaseUrl/').toString(),
+      '$localWebBaseUrl/health',
+    );
+    expect(
+      ApiConfig.apiUri(
+        '/tashu/stations',
+        baseUrl: '$localWebBaseUrl/',
+      ).toString(),
+      '$localWebBaseUrl/tashu/stations',
+    );
+  });
+
+  test('잘못된 API_BASE_URL은 명확히 실패한다', () {
+    expect(
+      () => ApiConfig.resolveBaseUrl(
+        definedValue: 'not-a-url',
         isWeb: false,
         platform: TargetPlatform.android,
       ),
-      'http://10.0.2.2:8080',
+      throwsA(isA<FormatException>()),
     );
   });
 

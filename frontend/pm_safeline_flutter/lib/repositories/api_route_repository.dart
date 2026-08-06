@@ -21,8 +21,7 @@ class ApiRouteRepository implements RouteRepository {
 
   @override
   Future<List<RouteResult>> findRoutes(Place start, Place destination) async {
-    final normalizedBaseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
-    final routeUri = Uri.parse('$normalizedBaseUrl/route');
+    final routeUri = ApiConfig.apiUri('/route', baseUrl: baseUrl);
     final requestBody = {
       'fromLat': start.position.latitude,
       'fromLon': start.position.longitude,
@@ -44,7 +43,7 @@ class ApiRouteRepository implements RouteRepository {
     }
 
     try {
-      await _logHealthStatus(normalizedBaseUrl);
+      await _logHealthStatus();
       final response = await _client
           .post(
             routeUri,
@@ -126,10 +125,10 @@ class ApiRouteRepository implements RouteRepository {
     }
   }
 
-  Future<void> _logHealthStatus(String normalizedBaseUrl) async {
+  Future<void> _logHealthStatus() async {
     if (!kDebugMode || !_enableDebugHealthCheck || _healthChecked) return;
     _healthChecked = true;
-    final healthUri = Uri.parse('$normalizedBaseUrl/health');
+    final healthUri = ApiConfig.apiUri('/health', baseUrl: baseUrl);
     try {
       final response = await _client
           .get(healthUri)
@@ -141,7 +140,7 @@ class ApiRouteRepository implements RouteRepository {
     } catch (error) {
       debugPrint(
         '[Route API] GET $healthUri failed=$error '
-        '(Android Emulator에서는 호스트 서버 주소로 10.0.2.2를 사용하세요.)',
+        '(API_BASE_URL과 서버 접근 가능 여부를 확인하세요.)',
       );
     }
   }

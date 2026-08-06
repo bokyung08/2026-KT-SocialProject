@@ -21,8 +21,19 @@ from .config import METRIC_CRS, SAMPLE_INTERVAL_M
 
 WGS84_STR = "EPSG:4326"
 
+# PM/이륜차 진입 불가 도로 — 대조/후보에서 제외(사고는 여기서 안 나고 PM 라우팅 대상도 아님).
+# 이걸 빼지 않으면 대조군에 고속도로가 섞여 teacher 가 "고속도로 vs 시가지"를 학습한다.
+EXCLUDED_HIGHWAYS = frozenset({"motorway", "motorway_link", "trunk", "trunk_link"})
+
 if TYPE_CHECKING:  # 무거운 import 는 함수 안에서 지연
     import geopandas as gpd
+
+
+def _highway_excluded(value, excluded) -> bool:
+    """highway 태그(리스트일 수 있음)가 제외 집합에 속하면 True."""
+    if isinstance(value, (list, tuple)):
+        return any(str(v) in excluded for v in value)
+    return str(value) in excluded
 
 
 def _bearing_deg(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
@@ -49,14 +60,27 @@ def load_drive_graph(bbox: tuple[float, float, float, float]):
 
 
 def load_drive_edges(
-    bbox: tuple[float, float, float, float], *, metric_crs: str = METRIC_CRS
+    bbox: tuple[float, float, float, float],
+    *,
+    metric_crs: str = METRIC_CRS,
+    exclude_highways=EXCLUDED_HIGHWAYS,
 ) -> "gpd.GeoDataFrame":
-    """edges GeoDataFrame(WGS84, geometry=LineString) 반환."""
+    """edges GeoDataFrame(WGS84->metric, geometry=LineString) 반환.
+
+    exclude_highways 에 든 도로유형(기본: 고속도로/자동차전용도로 계열)은 제외한다.
+    이 필터로 사고 스냅·후보 지점·대조 샘플링이 모두 PM 주행 가능한 도로로 제한된다.
+    """
     import osmnx as ox
 
     graph = load_drive_graph(bbox)
     edges = ox.graph_to_gdfs(graph, nodes=False, edges=True)
     edges = edges.reset_index()  # u, v, key 를 컬럼으로
+    if exclude_highways and "highway" in edges.columns:
+        keep = ~edges["highway"].map(lambda v: _highway_excluded(v, exclude_highways))
+        n_drop = int((~keep).sum())
+        edges = edges[keep].copy()
+        if n_drop:
+            print(f"[geo] PM 진입불가 도로 {n_drop} edge 제외(고속도로/자동차전용도로)")
     return edges.to_crs(metric_crs)
 
 

@@ -1,10 +1,10 @@
 """PMRiskViT 모델링 (PROJECT.md §4.4 teacher).
 
-로드뷰(단일 perspective) 이미지 -> 사고 위험도(확률) 예측. 백본은 torchvision ViT
-(ZenSVI ViT 의 대체/부트스트랩)이며, 데이터 희소성(§4.5-1)을 고려해 기본값은
-**backbone 고정 + 소형 헤드만 학습**(linear probe)이다.
-
-이 모듈은 torch/torchvision 을 모듈 최상단에서 임포트한다(HF 관례).
+로드뷰(단일 perspective 384 이미지) -> 사고 위험 로짓. 백본은 **torchvision
+`vit_b_16`** 이며, ZenSVI perception teacher 와 동일하게 SWAG 사전학습
+(`IMAGENET1K_SWAG_E2E_V1`)을 기본으로 쓴다. 헤드는 Place Pulse ViT 와 같은
+3-Linear/ReLU 구조이되 출력은 **사고 위험(이진 로짓)** 이고 TAAS 라벨로 학습한다.
+데이터 희소(§4.5-1) 대응으로 기본은 backbone 고정 + 헤드만 학습.
 """
 
 from __future__ import annotations
@@ -16,73 +16,88 @@ from torchvision import models
 from .configuration_pm_risk_vit import PMRiskViTConfig
 
 
+def _build_backbone(config: PMRiskViTConfig):
+    """torchvision vit_b_16 백본 생성. weights 지정 시 사전학습 로드(SWAG 는 384)."""
+    if config.weights:
+        weights = getattr(models.ViT_B_16_Weights, config.weights)
+        backbone = models.vit_b_16(weights=weights)
+    else:
+        backbone = models.vit_b_16(image_size=config.image_size)
+    if backbone.image_size != config.image_size:
+        raise ValueError(
+            f"백본 image_size({backbone.image_size}) != config.image_size({config.image_size}). "
+            f"weights={config.weights} 는 {backbone.image_size} 입력용입니다."
+        )
+    return backbone
+
+
 class PMRiskViT(nn.Module):
-    """ViT 백본 + 이진 위험도 헤드.
+    """torchvision ViT 백본 + 3-Linear/ReLU 이진 위험 헤드.
 
     forward() 는 sigmoid 적용 전 로짓([B, num_labels])을 반환한다. 학습 시
-    BCEWithLogitsLoss(+ pos_weight)로 클래스 불균형(§4.5-1)을 보정하고,
-    추론 확률은 predict_proba() 를 사용한다.
+    BCEWithLogitsLoss(+ pos_weight, + severity 가중)로 클래스 불균형·심각도(§4.5-1)를
+    반영하고, 추론 확률은 predict_proba() 를 사용한다.
     """
 
     def __init__(self, config: PMRiskViTConfig):
         super().__init__()
         self.config = config
 
-        weights = "DEFAULT" if config.pretrained else None
-        backbone = getattr(models, config.backbone)(weights=weights)
-
-        # torchvision ViT 는 heads.head 가 최종 분류층. 이를 위험도 헤드로 교체.
-        in_features = backbone.heads.head.in_features
-        backbone.heads.head = nn.Sequential(
-            nn.Dropout(config.dropout),
-            nn.Linear(in_features, config.num_labels),
-        )
+        backbone = _build_backbone(config)
+        in_features = backbone.heads.head.in_features  # 768
+        backbone.heads = nn.Identity()                 # 기본 분류 헤드 제거(백본=특징추출기)
         self.backbone = backbone
 
+        # 3-Linear/ReLU 위험 헤드 (Place Pulse ViT 스타일). 출력=사고 위험 로짓.
+        dims = [in_features, *config.head_hidden]
+        layers: list[nn.Module] = []
+        for i in range(len(dims) - 1):
+            layers += [nn.Linear(dims[i], dims[i + 1]), nn.ReLU(inplace=True), nn.Dropout(config.dropout)]
+        layers.append(nn.Linear(dims[-1], config.num_labels))
+        self.head = nn.Sequential(*layers)
+
         if config.freeze_backbone:
-            for name, p in self.backbone.named_parameters():
-                if not name.startswith("heads."):
-                    p.requires_grad_(False)
+            for p in self.backbone.parameters():
+                p.requires_grad_(False)
 
     def forward(self, pixel_values: "torch.Tensor") -> "torch.Tensor":
-        """pixel_values: [B, 3, H, W] (ImageNet 정규화). 반환: 로짓 [B, num_labels]."""
-        return self.backbone(pixel_values)
+        """pixel_values: [B, 3, 384, 384] (ImageNet 정규화). 반환: 로짓 [B, num_labels]."""
+        feats = self.backbone(pixel_values)  # heads=Identity -> [B, in_features]
+        return self.head(feats)
 
     @torch.no_grad()
     def predict_proba(self, pixel_values: "torch.Tensor") -> "torch.Tensor":
         """추론용 사고 위험 확률. num_labels==1 이면 [B] 로 squeeze, 아니면 [B, num_labels]."""
-        logits = self.forward(pixel_values)
-        proba = torch.sigmoid(logits)
+        proba = torch.sigmoid(self.forward(pixel_values))
         if proba.shape[-1] == 1:
             return proba.squeeze(-1)
         return proba
 
-    def load_backbone_state_dict(self, path_or_state, strict: bool = False):
-        """ZenSVI 사전학습 가중치를 백본에 로드(헤드 제외 가능).
+    def trainable_parameters(self):
+        """requires_grad=True 인 파라미터만 순회(옵티마이저 구성용)."""
+        return (p for p in self.parameters() if p.requires_grad)
 
-        ZenSVI 배포 가중치의 키 네이밍은 버전마다 다를 수 있어 기본 strict=False 로
-        로드하고 불일치 키를 로깅한다. path_or_state 는 파일 경로(str/Path) 또는
-        이미 로드된 state_dict 모두 허용한다.
+    def load_backbone_state_dict(self, path_or_state, strict: bool = False):
+        """백본에 외부 가중치(예: ZenSVI safety.pth) 로드(헤드 제외).
+
+        path_or_state 는 파일 경로 / state_dict / 피클된 nn.Module 모두 허용한다.
+        네이밍 차이를 감안해 기본 strict=False 로 로드하고 불일치 키를 로깅한다.
         """
-        if isinstance(path_or_state, dict):
-            sd = path_or_state
-        else:
-            sd = torch.load(path_or_state, map_location="cpu")
-        sd = sd.get("state_dict", sd) if isinstance(sd, dict) else sd
+        obj = path_or_state
+        if not isinstance(obj, (dict, nn.Module)):
+            obj = torch.load(obj, map_location="cpu", weights_only=False)
+        if isinstance(obj, nn.Module):
+            obj = getattr(obj, "backbone", obj).state_dict()
+        sd = obj.get("state_dict", obj) if isinstance(obj, dict) else obj
+        sd = {k.replace("backbone.", "", 1): v for k, v in sd.items()}
 
         missing, unexpected = self.backbone.load_state_dict(sd, strict=strict)
         if missing or unexpected:
             print(
-                f"[pm_risk_vit] ZenSVI 백본 로드: missing={len(missing)} "
+                f"[pm_risk_vit] 백본 가중치 로드: missing={len(missing)} "
                 f"unexpected={len(unexpected)} (헤드/네이밍 차이 예상)"
             )
         return self
-
-    def trainable_parameters(self):
-        """requires_grad=True 인 파라미터만 순회(옵티마이저 구성용)."""
-        for p in self.parameters():
-            if p.requires_grad:
-                yield p
 
 
 def build_pm_risk_vit(config: PMRiskViTConfig | None = None) -> PMRiskViT:

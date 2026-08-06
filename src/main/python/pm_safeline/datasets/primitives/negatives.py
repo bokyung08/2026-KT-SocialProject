@@ -76,11 +76,14 @@ def sample_negatives(
     ).to_numpy()
 
     # 3) 사고 exposure 분포를 분위수 bin 으로 -> bin 별 목표 개수 산정
+    # 소표본 가드: 사고가 적으면 분위수 bin 경계가 붕괴해 exposure 매칭이 무의미해진다
+    # (세종 3건 등). 사고 수에 맞춰 bin 수를 낮춘다(최소 1). 고속도로 제외는 geo 필터가 담당.
+    n_pos = len(accidents)
+    exposure_bins = max(1, min(exposure_bins, n_pos // 5))
     edges = _quantile_edges(acc_exp, exposure_bins)
     acc_bin = np.clip(np.digitize(acc_exp, edges[1:-1]), 0, exposure_bins - 1)
     cand_bin = np.clip(np.digitize(cand_exp, edges[1:-1]), 0, exposure_bins - 1)
 
-    n_pos = len(accidents)
     target_total = int(round(n_pos * negative_ratio))
     bin_frac = np.bincount(acc_bin, minlength=exposure_bins) / max(1, n_pos)
 

@@ -59,6 +59,29 @@ data class RouteMetrics(
 @Serializable
 data class HealthResponse(val status: String, val engine: Boolean)
 
+/** Flutter에 전달하는 표준 타슈 대여소 응답. */
+@Serializable
+data class TashuStationDto(
+    val id: String,
+    val name: String,
+    val address: String,
+    val lat: Double,
+    val lon: Double,
+    val availableBikes: Int? = null,
+    val totalDocks: Int? = null,
+    val returnableDocks: Int? = null,
+    val updatedAt: String? = null,
+)
+
+/** 실제 타슈 API 호출 결과. source=api인 경우에만 stations를 포함한다. */
+@Serializable
+data class TashuStationsResponse(
+    val source: String,
+    val count: Int = 0,
+    val stations: List<TashuStationDto> = emptyList(),
+    val message: String? = null,
+)
+
 /** 에러 응답. */
 @Serializable
 data class ErrorResponse(val error: String, val detail: String? = null)

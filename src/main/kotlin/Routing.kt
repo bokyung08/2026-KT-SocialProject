@@ -9,8 +9,12 @@ import io.ktor.server.routing.*
 import kt.dinjae.pm_safeline.api.ErrorResponse
 import kt.dinjae.pm_safeline.api.HealthResponse
 import kt.dinjae.pm_safeline.api.RouteRequest
+import kt.dinjae.pm_safeline.api.TashuStationsResponse
 import kt.dinjae.pm_safeline.routing.PmCostWeights
 import kt.dinjae.pm_safeline.routing.RoutingModule
+import kt.dinjae.pm_safeline.tashu.TashuFailureKind
+import kt.dinjae.pm_safeline.tashu.TashuStationException
+import kt.dinjae.pm_safeline.tashu.TashuStationService
 
 /**
  * 라우팅 서브시스템을 구성하고 REST 엔드포인트를 등록한다.
@@ -22,6 +26,7 @@ import kt.dinjae.pm_safeline.routing.RoutingModule
  */
 fun Application.configureRouting() {
     val module = RoutingModule.from(environment.config)
+    val tashuStationService = TashuStationService.fromEnvironment(environment.log)
     monitor.subscribe(ApplicationStopping) { module.close() }
 
     routing {
@@ -30,6 +35,33 @@ fun Application.configureRouting() {
 
         get("/health") {
             call.respond(HealthResponse(status = "ok", engine = module.routeService != null))
+        }
+
+        get("/tashu/stations") {
+            try {
+                val batch = tashuStationService.stations()
+                call.respond(
+                    TashuStationsResponse(
+                        source = "api",
+                        count = batch.totalCount,
+                        stations = batch.stations,
+                    ),
+                )
+            } catch (error: TashuStationException) {
+                val status =
+                    if (error.kind == TashuFailureKind.CONFIGURATION) {
+                        HttpStatusCode.ServiceUnavailable
+                    } else {
+                        HttpStatusCode.BadGateway
+                    }
+                call.respond(
+                    status,
+                    TashuStationsResponse(
+                        source = "error",
+                        message = error.clientMessage,
+                    ),
+                )
+            }
         }
 
         post("/route") {

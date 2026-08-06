@@ -61,6 +61,7 @@ dependencies {
     implementation(ktorLibs.server.routingOpenapi)
     implementation(ktorLibs.server.swagger)
     implementation(ktorLibs.server.contentNegotiation)
+    implementation(ktorLibs.server.cors)
     implementation(ktorLibs.server.statusPages)
     implementation(ktorLibs.serialization.kotlinx.json)
     implementation(libs.logback.classic)

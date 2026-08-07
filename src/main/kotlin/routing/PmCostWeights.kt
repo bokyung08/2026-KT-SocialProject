@@ -76,11 +76,41 @@ data class PmCostWeights(
     }
 
     companion object {
-        /** 안전 우선 기본값(거리보다 안전/연속성 가중). */
-        val SAFE_DEFAULT = PmCostWeights()
+        /**
+         * 비용함수 = **두 목적의 결합** — docs/results/IRL_REPORT.md (2026-08).
+         *
+         * (a) **PM 주행 연속성/승차감**(자전거도로 우선·차도 회피). teacher 사고위험과 무관하다
+         *     (자전거도로 근접↔위험 corr ~0 실측) → IRL 학습 대상이 아니라 **도메인 값**([bikeContinuity]).
+         *     PROJECT §1 의 "자전거도로 이용 비율 / 차도 사용 자제"가 곧 w2.
+         * (b) **사고위험 회피** — teacher 로부터 IRL(표준화 nonneg Bradley-Terry, 1,310 지점) 학습:
+         *     - **교차로 밀도** (corr +0.43) → 0.486  = w4(주 안전 페널티)
+         *     - **전환 다양성**(반경 내 도로유형 종류수, corr +0.35) → 0.266 = w3
+         *     - **버스정류장 밀도**(corr +0.29) → 0.272 = w5
+         *     전환다양성별 위험: 1종 0.25 / 2종 0.48 / 3종 0.57(전환 잦을수록 위험).
+         *
+         * [beta] = 안전 강도(위험↔거리 교환율, 정책 파라미터, (b)에만 적용). daejeon/busan/cheongju
+         * 검증에서 beta=2 가 경로 거리 +5~10%로 teacher 위험 −8~15% 감소.
+         *
+         * 발견(미반영, 향후 w6 후보): **편의시설(amenity) 밀도**가 위험과 corr +0.34 로 강하고
+         * 기존 인자와 독립적(전환과 corr 0.01) — 상업 밀집지가 사고위험↑. POI 밀도 EV 추가 시 반영 권장.
+         *
+         * 주의(프록시): IRL 은 '반경 내 밀도/다양성'을 측정했고, 이 CustomModel/turn-cost 는
+         * road_class_link(교차로)·road-type turn(전환)·bus_overlap EV(버스)로 근사한다 —
+         * **상대비·부호는 유효하나 절대 크기는 프록시·beta 에 의존**.
+         */
+        fun irlLearned(beta: Double = 2.0, bikeContinuity: Double = 3.0): PmCostWeights = PmCostWeights(
+            distanceWeight = 1.0,
+            arterialPenalty = bikeContinuity, // (a) 자전거도로 연속성 — 도메인 목적, teacher/IRL 무관
+            transitionPenalty = beta * 0.266, // (b) IRL 사고위험: 도로유형 전환(자전거단절 포함)
+            crossingPenalty = beta * 0.486,   // (b) IRL 사고위험: 교차로 밀도(주 페널티)
+            busOverlapPenalty = beta * 0.272, // (b) IRL 사고위험: 버스 밀도
+        )
+
+        /** 안전 우선 기본값 = (a)자전거연속성 + (b)IRL 사고위험(§4.2, beta=2). */
+        val SAFE_DEFAULT: PmCostWeights = irlLearned()
 
         /** 거리 우선(비교/기준선용). */
-        val SHORTEST = PmCostWeights(
+        val SHORTEST: PmCostWeights = PmCostWeights(
             distanceWeight = 5.0, arterialPenalty = 0.0, transitionPenalty = 0.0,
             crossingPenalty = 0.0, busOverlapPenalty = 0.0,
         )

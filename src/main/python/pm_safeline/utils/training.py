@@ -42,6 +42,9 @@ class TrainConfig:
     num_workers: int = 0
     patience: int = 5
     amp: bool = False
+    # 파인튜닝(freeze_backbone=False) 시 백본에 적용할 낮은 학습률(차별 lr, discriminative fine-tuning).
+    # None 이면 모든 학습 파라미터를 단일 lr 로 학습(기존 linear-probe 동작).
+    backbone_lr: float | None = None
 
 
 def _make_loader(ds: Dataset, cfg: TrainConfig, *, shuffle: bool) -> DataLoader:
@@ -104,12 +107,16 @@ def train_teacher(
     *,
     cfg: TrainConfig,
     pos_weight: "torch.Tensor | float | None" = None,
+    checkpoint_path: "str | Path | None" = None,
 ) -> dict:
     """teacher(ViT) 학습 루프.
 
     class 불균형(§4.5-1) 은 BCEWithLogitsLoss(pos_weight=...) 로 보정한다. optimizer 는
     model.trainable_parameters() 만 사용(freeze_backbone=True 면 헤드만 학습).
     valid ROC-AUC 기준 early stopping, 최고 성능 시점의 state_dict 를 best_state 로 반환.
+
+    checkpoint_path 를 주면 valid AUC 가 개선될 때마다 **즉시 디스크에 저장**한다(장시간 학습이
+    중단돼도 그 시점까지의 best 모델이 남도록). 저장 실패는 학습을 막지 않는다.
 
     반환: {"history": {...}, "best_state": state_dict, "best_epoch": int, "best_auc": float}
     """
@@ -122,9 +129,19 @@ def train_teacher(
     # 배치에 per-sample 가중치(severity)가 실려오면 곱해야 하므로 reduction='none'.
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight_dev, reduction="none")
 
-    optimizer = torch.optim.AdamW(
-        model.trainable_parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
-    )
+    # 파인튜닝 차별 lr: backbone_lr 이 지정되고 백본에 학습 파라미터가 있으면
+    # 헤드(cfg.lr) / 백본(cfg.backbone_lr) 을 별도 param group 으로 구성한다.
+    if getattr(cfg, "backbone_lr", None) is not None and hasattr(model, "backbone") and hasattr(model, "head"):
+        head_params = [p for p in model.head.parameters() if p.requires_grad]
+        bb_params = [p for p in model.backbone.parameters() if p.requires_grad]
+        groups = [{"params": head_params, "lr": cfg.lr}]
+        if bb_params:
+            groups.append({"params": bb_params, "lr": cfg.backbone_lr})
+        optimizer = torch.optim.AdamW(groups, lr=cfg.lr, weight_decay=cfg.weight_decay)
+    else:
+        optimizer = torch.optim.AdamW(
+            model.trainable_parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+        )
     scaler = torch.amp.GradScaler(enabled=(cfg.amp and cfg.device == "cuda"))
 
     history = {'train_loss': [], 'valid_loss': [], 'valid_auc': [], 'valid_ap': []}
@@ -184,6 +201,17 @@ def train_teacher(
             best_state = copy.deepcopy(model.state_dict())
             best_epoch = epoch
             epochs_since_improve = 0
+            # best 갱신 즉시 저장 → 장시간 학습 중단에도 최신 best 가 디스크에 남는다.
+            if checkpoint_path is not None:
+                try:
+                    save_checkpoint(
+                        model,
+                        checkpoint_path,
+                        extra={'best_epoch': best_epoch, 'best_auc': best_auc,
+                               'valid_loss': valid_metrics['loss']},
+                    )
+                except Exception as e:  # noqa: BLE001 - 저장 실패가 학습을 막지 않도록
+                    print(f"[train_teacher] 체크포인트 저장 실패(무시): {e}")
         else:
             epochs_since_improve += 1
             if epochs_since_improve >= cfg.patience:
@@ -210,16 +238,24 @@ def cross_validate(
     n_splits: int = 5,
     cfg: TrainConfig,
     pos_weight: "torch.Tensor | float | None" = None,
+    checkpoint_dir: "str | Path | None" = None,
 ) -> dict:
     """StratifiedGroupKFold(kfold_indices) 기반 k-fold 교차검증(§4.5-1: 데이터 희소 -> 고정 test 대신).
 
     build_model_fn: 매 fold 마다 새 모델을 만드는 콜백(가중치 누수 방지를 위해 fold마다 새로 생성).
     dataset       : PMRoadviewDataset(또는 .frame 속성을 가진 객체). transform 은 이미 적용돼 있어야 함.
 
+    checkpoint_dir 를 주면 각 fold 학습 중 best 모델을 fold{i}.pt 로 저장하고, fold 완료마다
+    누적 결과를 cv_progress.json 으로 기록한다(장시간 CV 가 중단돼도 완료된 fold 결과가 남도록).
+
     반환: {"fold_aucs": [...], "mean_auc": float, "std_auc": float}
     """
     from ..datasets.roadview import kfold_indices
     from torch.utils.data import Subset
+
+    ckpt_dir = Path(checkpoint_dir) if checkpoint_dir is not None else None
+    if ckpt_dir is not None:
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
 
     folds = kfold_indices(dataset, n_splits=n_splits, seed=42)
     fold_aucs = []
@@ -228,9 +264,28 @@ def cross_validate(
         train_sub = Subset(dataset, train_idx)
         valid_sub = Subset(dataset, valid_idx)
 
+        fold_ckpt = str(ckpt_dir / f"fold{i + 1}.pt") if ckpt_dir is not None else None
         model = build_model_fn()
-        result = train_teacher(model, train_sub, valid_sub, cfg=cfg, pos_weight=pos_weight)
+        result = train_teacher(
+            model, train_sub, valid_sub, cfg=cfg, pos_weight=pos_weight,
+            checkpoint_path=fold_ckpt,
+        )
         fold_aucs.append(result['best_auc'])
+
+        # fold 완료마다 누적 진행상황을 디스크에 기록(중단 대비).
+        if ckpt_dir is not None:
+            import json
+
+            try:
+                (ckpt_dir / "cv_progress.json").write_text(
+                    json.dumps(
+                        {'completed_folds': i + 1, 'n_splits': n_splits, 'fold_aucs': fold_aucs},
+                        ensure_ascii=False, indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+            except Exception as e:  # noqa: BLE001
+                print(f"[cross_validate] 진행상황 기록 실패(무시): {e}")
 
     import statistics
 

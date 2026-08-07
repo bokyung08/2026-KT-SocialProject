@@ -1,0 +1,394 @@
+<title>PMRiskViT 학습 리포트</title>
+<style>
+  :root {
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+    /* light (default) — cool asphalt-tinted neutrals */
+    --bg: #EEF0F3; --surface: #FFFFFF; --surface-2: #F6F7F9;
+    --ink: #12161C; --muted: #5A626D; --faint: #8A93A0; --hair: #E0E3E8;
+    --accent: #D9852180; --accent-solid: #C9761A; --accent-soft: #F6E7CE;
+    --good: #2E9E6B; --bad: #CE5147;
+    --f0: #2E8F9E; --f1: #4C6FD0; --f2: #8A63C4; --f3: #C85B93; --f4: #D9713F;
+    --shadow: 0 1px 2px rgba(16,22,28,.06), 0 8px 24px rgba(16,22,28,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0C0E12; --surface: #14171D; --surface-2: #171B22;
+      --ink: #E7EBF1; --muted: #929BA8; --faint: #6C7480; --hair: #262B34;
+      --accent: #F2A93B; --accent-solid: #F2A93B; --accent-soft: #2A2314;
+      --good: #46BE88; --bad: #E76B5F;
+      --f0: #45B3C2; --f1: #6E8BEC; --f2: #A784E0; --f3: #E579AD; --f4: #EE9060;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #EEF0F3; --surface: #FFFFFF; --surface-2: #F6F7F9;
+    --ink: #12161C; --muted: #5A626D; --faint: #8A93A0; --hair: #E0E3E8;
+    --accent: #D98521; --accent-solid: #C9761A; --accent-soft: #F6E7CE;
+    --good: #2E9E6B; --bad: #CE5147;
+    --f0: #2E8F9E; --f1: #4C6FD0; --f2: #8A63C4; --f3: #C85B93; --f4: #D9713F;
+    --shadow: 0 1px 2px rgba(16,22,28,.06), 0 8px 24px rgba(16,22,28,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C0E12; --surface: #14171D; --surface-2: #171B22;
+    --ink: #E7EBF1; --muted: #929BA8; --faint: #6C7480; --hair: #262B34;
+    --accent: #F2A93B; --accent-solid: #F2A93B; --accent-soft: #2A2314;
+    --good: #46BE88; --bad: #E76B5F;
+    --f0: #45B3C2; --f1: #6E8BEC; --f2: #A784E0; --f3: #E579AD; --f4: #EE9060;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font-sans); line-height: 1.55;
+    -webkit-font-smoothing: antialiased; font-feature-settings: "kern";
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: clamp(20px, 4vw, 56px) clamp(16px, 4vw, 40px) 80px; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before { content: ""; width: 28px; height: 2px; background: var(--accent-solid); display: inline-block; }
+  h1 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 12px; text-wrap: balance; font-weight: 680; }
+  .lede { color: var(--muted); max-width: 62ch; font-size: clamp(15px, 1.6vw, 17px); margin: 0; }
+
+  /* hero readout */
+  .hero {
+    margin: 34px 0 8px; display: grid; grid-template-columns: auto 1fr; gap: clamp(20px, 4vw, 44px);
+    align-items: center; padding: clamp(20px,3vw,30px); background: var(--surface);
+    border: 1px solid var(--hair); border-radius: 16px; box-shadow: var(--shadow);
+  }
+  .readout .rlabel { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .readout .rnum { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 620; letter-spacing: -0.01em;
+    font-size: clamp(46px, 8vw, 76px); line-height: 1; color: var(--accent-solid); margin-top: 4px; }
+  .readout .rnum .pm { font-size: .42em; color: var(--muted); font-weight: 500; }
+  .readout .rsub { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .readout .rsub b { color: var(--good); font-weight: 600; }
+  .herotext { color: var(--muted); font-size: 14.5px; border-left: 2px solid var(--hair); padding-left: clamp(16px,3vw,28px); }
+  .herotext b { color: var(--ink); font-weight: 620; }
+
+  /* kpi row */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 26px 0 6px; }
+  .kpi { background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; padding: 16px 16px 14px; }
+  .kpi .k-lab { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .kpi .k-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 27px; font-weight: 600; letter-spacing: -0.01em; margin-top: 8px; }
+  .kpi .k-note { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .kpi.accent .k-val { color: var(--accent-solid); }
+
+  section { margin-top: 46px; }
+  h2 { font-size: 13px; font-family: var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600;
+    margin: 0 0 4px; display: flex; align-items: baseline; gap: 10px; }
+  h2 .idx { color: var(--accent-solid); }
+  .h2sub { color: var(--faint); font-size: 13px; margin: 0 0 18px; max-width: 68ch; }
+
+  .card { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; padding: 18px 18px 12px; box-shadow: var(--shadow); }
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .chart-title { font-weight: 620; font-size: 15px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 4px; }
+  .lg { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); background: var(--surface-2);
+    border: 1px solid var(--hair); border-radius: 999px; padding: 3px 10px 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    user-select: none; transition: opacity .15s, background .15s; }
+  .lg:hover { background: var(--accent-soft); }
+  .lg:focus-visible { outline: 2px solid var(--accent-solid); outline-offset: 2px; }
+  .lg .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .lg[aria-pressed="false"] { opacity: .38; }
+  .chart-wrap { position: relative; }
+  svg.chart { width: 100%; height: auto; display: block; touch-action: none; }
+  .axis-label { fill: var(--faint); font-family: var(--font-mono); font-size: 11px; }
+  .grid-line { stroke: var(--hair); stroke-width: 1; }
+  .axis-line { stroke: var(--hair); stroke-width: 1.2; }
+  .tick-txt { fill: var(--faint); font-family: var(--font-mono); font-size: 10.5px; }
+  .guide { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--surface); border: 1px solid var(--hair); border-radius: 9px; box-shadow: var(--shadow);
+    padding: 8px 10px; font-family: var(--font-mono); font-size: 11.5px; z-index: 5; min-width: 118px;
+  }
+  .tip .t-ep { color: var(--muted); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 5px; }
+  .tip .t-row { display: flex; justify-content: space-between; gap: 14px; }
+  .tip .t-row .t-k { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+  .tip .t-row .t-v { font-variant-numeric: tabular-nums; color: var(--ink); }
+  .tip .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+  /* table */
+  .tbl-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 10px 12px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  td:first-child, th:first-child { text-align: left; }
+  tr.mean td { border-top: 2px solid var(--hair); border-bottom: none; font-weight: 640; color: var(--ink); }
+  tr.mean td.pt { color: var(--accent-solid); }
+  .fold-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 8px; vertical-align: baseline; }
+
+  .callout { margin-top: 20px; background: var(--surface-2); border: 1px solid var(--hair); border-left: 3px solid var(--accent-solid);
+    border-radius: 10px; padding: 16px 18px; font-size: 14px; color: var(--muted); }
+  .callout b { color: var(--ink); font-weight: 620; }
+  .callout .mono { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--hair);
+    padding: 1px 6px; border-radius: 5px; }
+  footer { margin-top: 54px; padding-top: 20px; border-top: 1px solid var(--hair); color: var(--faint);
+    font-family: var(--font-mono); font-size: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+  @media (max-width: 720px) {
+    .hero { grid-template-columns: 1fr; }
+    .herotext { border-left: none; border-top: 1px solid var(--hair); padding-left: 0; padding-top: 16px; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">PM 세이프라인 · Teacher (PMRiskViT)</p>
+  <h1>로드뷰 사고위험 ViT — 학습 리포트</h1>
+  <p class="lede">거리뷰 이미지로 사고 다발지점을 판별하는 teacher 모델의 학습 과정과 두 가지 개선
+  (① 백본 파인튜닝 · ② 지점 단위 집계)의 결과를 실측 데이터로 기록한다.</p>
+
+  <div class="hero">
+    <div class="readout">
+      <div class="rlabel">최종 성능 · point-level 5-fold CV</div>
+      <div class="rnum">0.867<span class="pm"> ± 0.017</span></div>
+      <div class="rsub">ROC-AUC · 편향 없는 교차검증 · baseline 대비 <b>+0.064</b></div>
+    </div>
+    <div class="herotext">
+      출발점은 frozen linear-probe의 image-level CV <b>0.803</b>. 여기에
+      <b>① 백본 파인튜닝</b>(+0.030)과 <b>② 4방향 지점 집계</b>(+0.034)를 더해
+      point-level <b>0.867</b>까지 끌어올렸다. 단일분할에서 관측된 0.894는 쉬운 분할 +
+      warm-start 누수로 인한 낙관치였고, 누수를 제거한 CV가 정직한 값을 확정한다.
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section>
+    <h2><span class="idx">01</span> 파인튜닝 (단일 분할)</h2>
+    <p class="h2sub">warm-start 후 백본 lr 1e-5 / 헤드 1e-4. valid AUC는 epoch 2에서 정점(0.851) 뒤 하락 —
+      train_loss는 계속 떨어지는데 valid_loss가 폭증하는 전형적 과적합.</p>
+    <div class="card">
+      <div class="chart-head">
+        <span class="chart-title">loss &amp; valid AUC — epoch별</span>
+        <div class="legend" id="lg-ft"></div>
+      </div>
+      <div class="chart-wrap" id="w-ft"><div class="tip" id="tip-ft"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="idx">02</span> point-level CV — fold별 valid AUC</h2>
+    <p class="h2sub">누수 없이 fold마다 처음부터 파인튜닝. ★ = 각 fold의 best epoch(early-stopping 선택 지점).
+      범례를 눌러 fold를 켜고 끌 수 있다.</p>
+    <div class="card">
+      <div class="chart-head">
+        <span class="chart-title">valid AUC (image-level) — epoch별</span>
+        <div class="legend" id="lg-cv"></div>
+      </div>
+      <div class="chart-wrap" id="w-cv"><div class="tip" id="tip-cv"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="idx">03</span> 과적합 — valid_loss vs train_loss</h2>
+    <p class="h2sub">실선 = valid_loss(상승), 점선 = train_loss(0으로 수렴). 모든 fold에서 두 곡선이 벌어진다 —
+      백본 전체(86.5M)를 소량 데이터로 학습해 생기는 과적합. 정규화 여지가 여기 있다.</p>
+    <div class="card">
+      <div class="chart-head">
+        <span class="chart-title">loss — epoch별 (fold별 색)</span>
+        <div class="legend" id="lg-of"></div>
+      </div>
+      <div class="chart-wrap" id="w-of"><div class="tip" id="tip-of"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="idx">04</span> fold별 결과</h2>
+    <p class="h2sub">각 fold의 held-out 검증셋에서 image-level·point-level AUC. 지점 집계(4방향 mean-pool)가
+      단일 이미지 대비 일관되게 높다.</p>
+    <div class="card tbl-scroll">
+      <table id="foldtbl">
+        <thead><tr><th>Fold</th><th>best epoch</th><th>image AUC</th><th>point AUC</th><th>Δ (point−image)</th></tr></thead>
+        <tbody id="foldbody"></tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <b>왜 0.894가 아니라 0.867인가.</b> 단일분할(seed 42)은 상대적으로 쉬운 분할이었고, 그 파인튜닝은
+      전체 데이터로 학습된 teacher에서 warm-start해 이미 검증 지점을 본 상태였다(누수). CV는 fold마다
+      처음부터 학습해 이 편향을 제거한다 — 그래서 <b>0.867 ± 0.017</b>이 정직한 일반화 성능이다.
+      권장 가중치: <span class="mono">checkpoints/pm_risk_vit_teacher_ft.pt</span> (추론 시 지점 집계 적용).
+    </div>
+  </section>
+
+  <footer>
+    <span>PM 세이프라인 · PMRiskViT (ViT-B/16 SWAG · 384)</span>
+    <span>데이터 17,184장 · 4,104 지점 · 5개 지역</span>
+  </footer>
+</div>
+
+<script>
+const DATA = {"finetune":[{"epoch":1,"train":1.0825,"valid":0.7679,"auc":0.8367},{"epoch":2,"train":0.8283,"valid":0.748,"auc":0.8509},{"epoch":3,"train":0.6099,"valid":0.9092,"auc":0.8421},{"epoch":4,"train":0.439,"valid":1.0051,"auc":0.8388},{"epoch":5,"train":0.2971,"valid":1.2051,"auc":0.8462},{"epoch":6,"train":0.2223,"valid":1.5149,"auc":0.8367}],
+"folds":{"0":[{"epoch":1,"train":1.1281,"valid":0.8532,"auc":0.8512},{"epoch":2,"train":0.9351,"valid":0.7174,"auc":0.8564},{"epoch":3,"train":0.7016,"valid":0.8104,"auc":0.8511},{"epoch":4,"train":0.4906,"valid":0.9089,"auc":0.8503},{"epoch":5,"train":0.38,"valid":0.993,"auc":0.8396},{"epoch":6,"train":0.2327,"valid":1.1313,"auc":0.8394}],
+"1":[{"epoch":1,"train":1.1181,"valid":0.8436,"auc":0.8154},{"epoch":2,"train":0.9008,"valid":0.8394,"auc":0.8307},{"epoch":3,"train":0.6774,"valid":0.8939,"auc":0.8299},{"epoch":4,"train":0.478,"valid":1.018,"auc":0.833},{"epoch":5,"train":0.3526,"valid":1.195,"auc":0.8361},{"epoch":6,"train":0.233,"valid":1.5525,"auc":0.8341},{"epoch":7,"train":0.1616,"valid":1.5435,"auc":0.8335},{"epoch":8,"train":0.1292,"valid":1.7333,"auc":0.8308},{"epoch":9,"train":0.0929,"valid":1.8044,"auc":0.8299}],
+"2":[{"epoch":1,"train":1.1159,"valid":0.8158,"auc":0.8014},{"epoch":2,"train":0.9152,"valid":0.8341,"auc":0.8067},{"epoch":3,"train":0.6799,"valid":0.9171,"auc":0.8106},{"epoch":4,"train":0.4243,"valid":1.211,"auc":0.8003},{"epoch":5,"train":0.3099,"valid":1.3529,"auc":0.7934},{"epoch":6,"train":0.2316,"valid":1.8233,"auc":0.8015},{"epoch":7,"train":0.1481,"valid":1.8787,"auc":0.7871}],
+"3":[{"epoch":1,"train":1.1262,"valid":0.8033,"auc":0.8226},{"epoch":2,"train":0.9108,"valid":0.7676,"auc":0.8341},{"epoch":3,"train":0.6664,"valid":0.929,"auc":0.8321},{"epoch":4,"train":0.4504,"valid":1.0866,"auc":0.8198},{"epoch":5,"train":0.2984,"valid":1.2137,"auc":0.8238},{"epoch":6,"train":0.237,"valid":1.4955,"auc":0.8355},{"epoch":7,"train":0.1627,"valid":1.4554,"auc":0.822},{"epoch":8,"train":0.122,"valid":1.6525,"auc":0.8233},{"epoch":9,"train":0.1044,"valid":1.5012,"auc":0.8203},{"epoch":10,"train":0.0797,"valid":2.0911,"auc":0.8248}],
+"4":[{"epoch":1,"train":1.104,"valid":0.8387,"auc":0.8159},{"epoch":2,"train":0.9071,"valid":0.7837,"auc":0.8216},{"epoch":3,"train":0.6853,"valid":0.9674,"auc":0.8251},{"epoch":4,"train":0.4897,"valid":1.0598,"auc":0.8103},{"epoch":5,"train":0.3374,"valid":1.2982,"auc":0.8189},{"epoch":6,"train":0.2183,"valid":1.1735,"auc":0.8206},{"epoch":7,"train":0.1998,"valid":1.6231,"auc":0.8193}]},
+"foldres":{"0":{"best_epoch":1,"image_auc":0.8564,"point_auc":0.8977},"1":{"best_epoch":4,"image_auc":0.8361,"point_auc":0.8704},"2":{"best_epoch":2,"image_auc":0.8106,"point_auc":0.8458},"3":{"best_epoch":5,"image_auc":0.8355,"point_auc":0.8666},"4":{"best_epoch":2,"image_auc":0.8251,"point_auc":0.8563}}};
+
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const FCOL = ["--f0","--f1","--f2","--f3","--f4"];
+const fmt = (v,d=3) => v.toFixed(d);
+
+/* ---------- KPI tiles ---------- */
+(function(){
+  const items = [
+    {lab:"Baseline (frozen)", val:"0.803", note:"image · CV", cls:""},
+    {lab:"① 파인튜닝", val:"0.833", note:"image · CV  (+0.030)", cls:""},
+    {lab:"①+② 최종", val:"0.867", note:"point · CV  (+0.034)", cls:"accent"},
+    {lab:"총 향상", val:"+0.064", note:"0.803 → 0.867", cls:""},
+  ];
+  document.getElementById("kpis").innerHTML = items.map(k =>
+    `<div class="kpi ${k.cls}"><div class="k-lab">${k.lab}</div><div class="k-val">${k.val}</div><div class="k-note">${k.note}</div></div>`
+  ).join("");
+})();
+
+/* ---------- generic line chart ---------- */
+function makeChart(wrapId, tipId, legendId, series, opts){
+  const W = 760, H = 360, m = {t:18, r:opts.rAxis?54:20, b:38, l:52};
+  const wrap = document.getElementById(wrapId), tip = document.getElementById(tipId);
+  const px = x => m.l + (x - opts.xdom[0])/(opts.xdom[1]-opts.xdom[0]) * (W-m.l-m.r);
+  const pyL = y => H-m.b - (y - opts.ldom[0])/(opts.ldom[1]-opts.ldom[0]) * (H-m.t-m.b);
+  const pyR = y => H-m.b - (y - opts.rdom[0])/(opts.rdom[1]-opts.rdom[0]) * (H-m.t-m.b);
+  const py = s => s.axis==="right" ? pyR : pyL;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS,"svg");
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`); svg.setAttribute("class","chart");
+  svg.setAttribute("role","img"); svg.setAttribute("aria-label",opts.aria||"chart");
+  const el = (t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+  // gridlines + left ticks
+  const lticks = opts.lticks || 5;
+  for(let i=0;i<=lticks;i++){
+    const v = opts.ldom[0] + (opts.ldom[1]-opts.ldom[0])*i/lticks, y = pyL(v);
+    svg.appendChild(el("line",{class:"grid-line",x1:m.l,x2:W-m.r,y1:y,y2:y}));
+    const tx = el("text",{class:"tick-txt",x:m.l-8,y:y+3.5,"text-anchor":"end"}); tx.textContent=(opts.lfmt||(d=>d.toFixed(1)))(v); svg.appendChild(tx);
+  }
+  // right ticks
+  if(opts.rAxis){
+    const rt = opts.rticks||4;
+    for(let i=0;i<=rt;i++){
+      const v = opts.rdom[0] + (opts.rdom[1]-opts.rdom[0])*i/rt, y = pyR(v);
+      const tx = el("text",{class:"tick-txt",x:W-m.r+8,y:y+3.5,"text-anchor":"start"}); tx.textContent=v.toFixed(2); svg.appendChild(tx);
+    }
+    const rl = el("text",{class:"axis-label",x:W-m.r+14,y:m.t+2,"text-anchor":"start"}); rl.textContent=opts.rAxis; svg.appendChild(rl);
+  }
+  // x ticks
+  for(let x=opts.xdom[0]; x<=opts.xdom[1]; x++){
+    const X=px(x);
+    const tx = el("text",{class:"tick-txt",x:X,y:H-m.b+18,"text-anchor":"middle"}); tx.textContent=x; svg.appendChild(tx);
+  }
+  svg.appendChild(el("line",{class:"axis-line",x1:m.l,x2:m.l,y1:m.t,y2:H-m.b}));
+  svg.appendChild(el("line",{class:"axis-line",x1:m.l,x2:W-m.r,y1:H-m.b,y2:H-m.b}));
+  const lax = el("text",{class:"axis-label",x:m.l-40,y:m.t-4}); lax.textContent=opts.lAxis||""; svg.appendChild(lax);
+  const xax = el("text",{class:"axis-label",x:W-m.r,y:H-6,"text-anchor":"end"}); xax.textContent="epoch"; svg.appendChild(xax);
+
+  const guide = el("line",{class:"guide",y1:m.t,y2:H-m.b}); svg.appendChild(guide);
+
+  // series
+  const groups = {};
+  series.forEach(s=>{
+    const g = el("g",{"data-s":s.key}); const yf = py(s);
+    const d = s.points.map((p,i)=>(i?"L":"M")+px(p.x)+" "+yf(p.y)).join(" ");
+    g.appendChild(el("path",{d, fill:"none", stroke:cssv(s.color), "stroke-width":s.w||2,
+      "stroke-dasharray":s.dash||"", "stroke-linejoin":"round","stroke-linecap":"round", opacity:s.dash?0.55:1}));
+    s.points.forEach(p=>{
+      const isBest = s.bestEp && p.x===s.bestEp;
+      g.appendChild(el("circle",{cx:px(p.x),cy:yf(p.y),r:isBest?0:2.4, fill:cssv(s.color)}));
+      if(isBest){
+        const st = el("path",{class:"star", transform:`translate(${px(p.x)},${yf(p.y)})`, fill:cssv(s.color),
+          d:"M0,-6.5 1.8,-2 6.5,-2 2.7,1.2 4,6 0,3 -4,6 -2.7,1.2 -6.5,-2 -1.8,-2 Z", stroke:cssv("--surface"), "stroke-width":0.8});
+        g.appendChild(st);
+      }
+    });
+    svg.appendChild(g); groups[s.key]=g;
+  });
+  wrap.insertBefore(svg, tip);
+
+  // legend
+  const legend = document.getElementById(legendId);
+  legend.innerHTML="";
+  series.filter(s=>!s.noLegend).forEach(s=>{
+    const b = document.createElement("button"); b.className="lg"; b.setAttribute("aria-pressed","true");
+    b.innerHTML=`<span class="sw" style="background:${cssv(s.color)}"></span>${s.label}`;
+    b.onclick=()=>{ const on=b.getAttribute("aria-pressed")==="true"; b.setAttribute("aria-pressed",String(!on));
+      (s.groupKeys||[s.key]).forEach(k=>{ if(groups[k]) groups[k].style.display = on?"none":""; }); s._hidden=on; };
+    legend.appendChild(b);
+  });
+
+  // hover
+  const active = ()=>series.filter(s=>!s._hidden && !s.noTip);
+  svg.addEventListener("pointermove", ev=>{
+    const r = svg.getBoundingClientRect();
+    const xv = opts.xdom[0] + (ev.clientX-r.left)/r.width*W - m.l; // approximate; recompute properly below
+    const frac = ((ev.clientX-r.left)/r.width*W - m.l)/(W-m.l-m.r);
+    let ex = Math.round(opts.xdom[0] + frac*(opts.xdom[1]-opts.xdom[0]));
+    ex = Math.max(opts.xdom[0], Math.min(opts.xdom[1], ex));
+    const X = px(ex);
+    guide.setAttribute("x1",X); guide.setAttribute("x2",X); guide.style.opacity=1;
+    let rows="";
+    active().forEach(s=>{
+      const p = s.points.find(q=>q.x===ex); if(!p) return;
+      rows += `<div class="t-row"><span class="t-k"><span class="dot" style="background:${cssv(s.color)}"></span>${s.label}</span><span class="t-v">${(s.tipFmt||fmt)(p.y)}</span></div>`;
+    });
+    if(!rows){ tip.style.opacity=0; return; }
+    tip.innerHTML = `<div class="t-ep">epoch ${ex}</div>${rows}`;
+    tip.style.opacity=1;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = (X/W)*r.width + 14; if(left+tw > r.width) left = (X/W)*r.width - tw - 14;
+    let top = ev.clientY - r.top - th/2; top = Math.max(4, Math.min(r.height-th-4, top));
+    tip.style.left = left+"px"; tip.style.top = top+"px";
+  });
+  svg.addEventListener("pointerleave", ()=>{ tip.style.opacity=0; guide.style.opacity=0; });
+}
+
+/* ---------- chart 01: fine-tune ---------- */
+makeChart("w-ft","tip-ft","lg-ft",[
+  {key:"tr",label:"train_loss",color:"--f1",points:DATA.finetune.map(d=>({x:d.epoch,y:d.train})),tipFmt:v=>v.toFixed(3)},
+  {key:"vl",label:"valid_loss",color:"--bad",points:DATA.finetune.map(d=>({x:d.epoch,y:d.valid})),tipFmt:v=>v.toFixed(3)},
+  {key:"au",label:"valid_auc",color:"--accent-solid",axis:"right",bestEp:2,w:2.4,points:DATA.finetune.map(d=>({x:d.epoch,y:d.auc})),tipFmt:v=>v.toFixed(4)},
+],{xdom:[1,6],ldom:[0,1.6],rdom:[0.78,0.88],rAxis:"AUC",lAxis:"loss",lticks:4,rticks:5,aria:"파인튜닝 loss와 valid AUC"});
+
+/* ---------- chart 02: CV valid AUC ---------- */
+makeChart("w-cv","tip-cv","lg-cv",
+  Object.keys(DATA.folds).map(k=>({
+    key:"f"+k,label:"fold"+k,color:FCOL[+k],bestEp:DATA.foldres[k].best_epoch+1,w:2,
+    points:DATA.folds[k].map(d=>({x:d.epoch,y:d.auc})),tipFmt:v=>v.toFixed(4)
+  })),
+  {xdom:[1,10],ldom:[0.78,0.86],lAxis:"AUC",lticks:4,lfmt:v=>v.toFixed(2),aria:"fold별 valid AUC"});
+
+/* ---------- chart 03: overfitting ---------- */
+makeChart("w-of","tip-of","lg-of",
+  Object.keys(DATA.folds).flatMap(k=>([
+    {key:"v"+k,label:"fold"+k+" valid",color:FCOL[+k],w:2,groupKeys:["v"+k,"t"+k],
+      points:DATA.folds[k].map(d=>({x:d.epoch,y:d.valid})),tipFmt:v=>v.toFixed(2)},
+    {key:"t"+k,label:"fold"+k+" train",color:FCOL[+k],dash:"3 3",noLegend:true,noTip:true,
+      points:DATA.folds[k].map(d=>({x:d.epoch,y:d.train}))},
+  ])),
+  {xdom:[1,10],ldom:[0,2.2],lAxis:"loss",lticks:4,lfmt:v=>v.toFixed(1),aria:"과적합 valid vs train loss"});
+
+/* ---------- fold table ---------- */
+(function(){
+  const ks = Object.keys(DATA.foldres);
+  let pts=[], ims=[];
+  const body = ks.map(k=>{
+    const r=DATA.foldres[k]; pts.push(r.point_auc); ims.push(r.image_auc);
+    const d = r.point_auc - r.image_auc;
+    return `<tr><td><span class="fold-dot" style="background:${cssv(FCOL[+k])}"></span>fold ${k}</td>
+      <td>${r.best_epoch+1}</td><td>${fmt(r.image_auc,4)}</td><td>${fmt(r.point_auc,4)}</td>
+      <td style="color:var(--good)">+${fmt(d,4)}</td></tr>`;
+  }).join("");
+  const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+  const std=a=>{const mu=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-mu)**2,0)/a.length);};
+  const meanRow = `<tr class="mean"><td>평균 ± σ</td><td>—</td>
+      <td>${fmt(mean(ims),3)} ± ${fmt(std(ims),3)}</td>
+      <td class="pt">${fmt(mean(pts),3)} ± ${fmt(std(pts),3)}</td>
+      <td style="color:var(--good)">+${fmt(mean(pts)-mean(ims),3)}</td></tr>`;
+  document.getElementById("foldbody").innerHTML = body + meanRow;
+})();
+</script>

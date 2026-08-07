@@ -42,6 +42,9 @@ class TrainConfig:
     num_workers: int = 0
     patience: int = 5
     amp: bool = False
+    # 파인튜닝(freeze_backbone=False) 시 백본에 적용할 낮은 학습률(차별 lr, discriminative fine-tuning).
+    # None 이면 모든 학습 파라미터를 단일 lr 로 학습(기존 linear-probe 동작).
+    backbone_lr: float | None = None
 
 
 def _make_loader(ds: Dataset, cfg: TrainConfig, *, shuffle: bool) -> DataLoader:
@@ -126,9 +129,19 @@ def train_teacher(
     # 배치에 per-sample 가중치(severity)가 실려오면 곱해야 하므로 reduction='none'.
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight_dev, reduction="none")
 
-    optimizer = torch.optim.AdamW(
-        model.trainable_parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
-    )
+    # 파인튜닝 차별 lr: backbone_lr 이 지정되고 백본에 학습 파라미터가 있으면
+    # 헤드(cfg.lr) / 백본(cfg.backbone_lr) 을 별도 param group 으로 구성한다.
+    if getattr(cfg, "backbone_lr", None) is not None and hasattr(model, "backbone") and hasattr(model, "head"):
+        head_params = [p for p in model.head.parameters() if p.requires_grad]
+        bb_params = [p for p in model.backbone.parameters() if p.requires_grad]
+        groups = [{"params": head_params, "lr": cfg.lr}]
+        if bb_params:
+            groups.append({"params": bb_params, "lr": cfg.backbone_lr})
+        optimizer = torch.optim.AdamW(groups, lr=cfg.lr, weight_decay=cfg.weight_decay)
+    else:
+        optimizer = torch.optim.AdamW(
+            model.trainable_parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+        )
     scaler = torch.amp.GradScaler(enabled=(cfg.amp and cfg.device == "cuda"))
 
     history = {'train_loss': [], 'valid_loss': [], 'valid_auc': [], 'valid_ap': []}

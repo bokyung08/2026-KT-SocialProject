@@ -1,0 +1,256 @@
+<title>PM 세이프라인 IRL 리포트</title>
+<style>
+  :root {
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+    --bg: #EEF0F3; --surface: #FFFFFF; --surface-2: #F6F7F9;
+    --ink: #12161C; --muted: #5A626D; --faint: #8A93A0; --hair: #E0E3E8;
+    --accent: #1E8E9E; --accent-solid: #157F8E; --accent-soft: #D5EBEE;
+    --good: #2E9E6B; --bad: #CE5147; --warn: #D98521;
+    --r0: #D9713F; --r1: #2E8F9E; --r2: #8A63C4;
+    --shadow: 0 1px 2px rgba(16,22,28,.06), 0 8px 24px rgba(16,22,28,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0C0E12; --surface: #14171D; --surface-2: #171B22;
+      --ink: #E7EBF1; --muted: #929BA8; --faint: #6C7480; --hair: #262B34;
+      --accent: #38B7C8; --accent-solid: #38B7C8; --accent-soft: #14262A;
+      --good: #46BE88; --bad: #E76B5F; --warn: #F2A93B;
+      --r0: #EE9060; --r1: #45B3C2; --r2: #A784E0;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] { --bg:#EEF0F3; --surface:#FFFFFF; --surface-2:#F6F7F9; --ink:#12161C; --muted:#5A626D; --faint:#8A93A0; --hair:#E0E3E8; --accent:#1E8E9E; --accent-solid:#157F8E; --accent-soft:#D5EBEE; --good:#2E9E6B; --bad:#CE5147; --warn:#D98521; --r0:#D9713F; --r1:#2E8F9E; --r2:#8A63C4; --shadow:0 1px 2px rgba(16,22,28,.06),0 8px 24px rgba(16,22,28,.05); }
+  :root[data-theme="dark"] { --bg:#0C0E12; --surface:#14171D; --surface-2:#171B22; --ink:#E7EBF1; --muted:#929BA8; --faint:#6C7480; --hair:#262B34; --accent:#38B7C8; --accent-solid:#38B7C8; --accent-soft:#14262A; --good:#46BE88; --bad:#E76B5F; --warn:#F2A93B; --r0:#EE9060; --r1:#45B3C2; --r2:#A784E0; --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35); }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1060px; margin:0 auto; padding:clamp(20px,4vw,56px) clamp(16px,4vw,40px) 80px; }
+  .eyebrow { font-family:var(--font-mono); font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin:0 0 14px; display:flex; align-items:center; gap:10px; }
+  .eyebrow::before { content:""; width:28px; height:2px; background:var(--accent-solid); display:inline-block; }
+  h1 { font-size:clamp(28px,4.4vw,46px); line-height:1.05; letter-spacing:-0.02em; margin:0 0 12px; text-wrap:balance; font-weight:680; }
+  .lede { color:var(--muted); max-width:64ch; font-size:clamp(15px,1.6vw,17px); margin:0; }
+  .hero { margin:34px 0 8px; display:grid; grid-template-columns:auto 1fr; gap:clamp(20px,4vw,44px); align-items:center; padding:clamp(20px,3vw,30px); background:var(--surface); border:1px solid var(--hair); border-radius:16px; box-shadow:var(--shadow); }
+  .readout .rlabel { font-family:var(--font-mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .readout .rnum { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-weight:620; letter-spacing:-0.01em; font-size:clamp(40px,7vw,64px); line-height:1; color:var(--accent-solid); margin-top:6px; }
+  .readout .rnum small { font-size:.4em; color:var(--muted); font-weight:500; }
+  .readout .rsub { font-family:var(--font-mono); font-size:12.5px; color:var(--muted); margin-top:8px; }
+  .readout .rsub b { color:var(--good); font-weight:600; }
+  .herotext { color:var(--muted); font-size:14.5px; border-left:2px solid var(--hair); padding-left:clamp(16px,3vw,28px); }
+  .herotext b { color:var(--ink); font-weight:620; }
+  .herotext code { font-family:var(--font-mono); font-size:12.5px; background:var(--surface-2); border:1px solid var(--hair); padding:1px 6px; border-radius:5px; color:var(--ink); }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:26px 0 6px; }
+  .kpi { background:var(--surface); border:1px solid var(--hair); border-radius:12px; padding:16px 16px 14px; }
+  .kpi .k-lab { font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+  .kpi .k-val { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:26px; font-weight:600; letter-spacing:-0.01em; margin-top:8px; }
+  .kpi .k-note { font-family:var(--font-mono); font-size:11.5px; color:var(--muted); margin-top:3px; }
+  .kpi.accent .k-val { color:var(--accent-solid); }
+  section { margin-top:46px; }
+  h2 { font-size:13px; font-family:var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 4px; display:flex; align-items:baseline; gap:10px; }
+  h2 .idx { color:var(--accent-solid); }
+  .h2sub { color:var(--faint); font-size:13px; margin:0 0 18px; max-width:70ch; }
+  .card { background:var(--surface); border:1px solid var(--hair); border-radius:14px; padding:18px 18px 14px; box-shadow:var(--shadow); }
+  .chart-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+  .chart-title { font-weight:620; font-size:15px; }
+  .legend { display:flex; flex-wrap:wrap; gap:10px; font-family:var(--font-mono); font-size:11.5px; color:var(--muted); }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .legend .sw { width:11px; height:11px; border-radius:3px; }
+  .chart-wrap { position:relative; }
+  svg.chart { width:100%; height:auto; display:block; touch-action:none; }
+  .grid-line { stroke:var(--hair); stroke-width:1; }
+  .axis-line { stroke:var(--hair); stroke-width:1.2; }
+  .tick-txt { fill:var(--faint); font-family:var(--font-mono); font-size:10.5px; }
+  .axis-label { fill:var(--faint); font-family:var(--font-mono); font-size:11px; }
+  .barlab { fill:var(--ink); font-family:var(--font-mono); font-size:12px; }
+  .barval { fill:var(--muted); font-family:var(--font-mono); font-size:11px; font-variant-numeric:tabular-nums; }
+  .tip { position:absolute; pointer-events:none; opacity:0; transition:opacity .1s; background:var(--surface); border:1px solid var(--hair); border-radius:9px; box-shadow:var(--shadow); padding:8px 10px; font-family:var(--font-mono); font-size:11.5px; z-index:5; min-width:130px; }
+  .tip .t-h { color:var(--muted); font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; margin-bottom:5px; }
+  .tip .t-row { display:flex; justify-content:space-between; gap:14px; }
+  .tip .t-row .v { color:var(--ink); font-variant-numeric:tabular-nums; }
+  .tbl-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:13px; font-variant-numeric:tabular-nums; }
+  th,td { text-align:right; padding:10px 12px; border-bottom:1px solid var(--hair); white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
+  td:first-child, th:first-child { text-align:left; }
+  tr.zero td { color:var(--faint); }
+  tr.main td.w { color:var(--accent-solid); font-weight:640; }
+  .callout { margin-top:20px; background:var(--surface-2); border:1px solid var(--hair); border-left:3px solid var(--warn); border-radius:10px; padding:16px 18px; font-size:14px; color:var(--muted); }
+  .callout b { color:var(--ink); font-weight:620; }
+  .cost { font-family:var(--font-mono); font-size:13.5px; color:var(--ink); background:var(--surface-2); border:1px solid var(--hair); border-radius:10px; padding:14px 16px; margin-top:14px; overflow-x:auto; }
+  .cost b { color:var(--accent-solid); }
+  footer { margin-top:54px; padding-top:20px; border-top:1px solid var(--hair); color:var(--faint); font-family:var(--font-mono); font-size:12px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  @media (max-width:720px){ .hero{grid-template-columns:1fr;} .herotext{border-left:none;border-top:1px solid var(--hair);padding-left:0;padding-top:16px;} .kpis{grid-template-columns:repeat(2,1fr);} }
+  @media (prefers-reduced-motion:reduce){ *{transition:none!important;} }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">PM 세이프라인 · IRL (비용함수 가중치 학습)</p>
+  <h1>teacher 위험 → 경로 비용함수 증류</h1>
+  <p class="lede">로드뷰 사고위험 teacher 의 판단으로부터, 그것을 재현하는 경로 비용함수 가중치(w1~w5)를
+  Bradley-Terry IRL 로 역산한다. 순진한 route 접근의 실패를 진단하고, <b>밀도 feature</b>로 신호를 되살려
+  실제로 고위험 경로를 회피하는 비용함수를 학습·검증했다.</p>
+
+  <div class="hero">
+    <div class="readout">
+      <div class="rlabel">비용함수 효과 · busan 검증 (β=2)</div>
+      <div class="rnum">−14.6%<small> teacher 위험</small></div>
+      <div class="rsub">경로 거리 <b>+5.2%</b> 만으로 · 3개 지역 일반화 확인</div>
+    </div>
+    <div class="herotext">
+      teacher 위험은 <b>교차로 밀도</b>(+0.43)·<b>전환 다양성</b>(+0.35)·<b>편의시설 밀도</b>(+0.34)·
+      <b>버스 밀도</b>(+0.29)로 설명된다. 자전거 연속성(w2)은 별개 목적이라 도메인 값으로 둔다. 학습된 사고위험 비용:
+      <code>β·(0.49·교차로_z + 0.27·전환_z + 0.27·버스_z)</code>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section>
+    <h2><span class="idx">01</span> 어떤 feature 가 사고 위험을 예측하나</h2>
+    <p class="h2sub">5개 지역 통합 1,322 지점에서 각 OSM feature 와 teacher 위험도의 상관.
+      밀도 기반 feature 만 신호를 담고, 전통적 도로유형(간선·속도·차선)은 ~0.</p>
+    <div class="card">
+      <div class="chart-wrap" id="w-corr"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="idx">02</span> 안전–효율 트레이드오프 (검증)</h2>
+    <p class="h2sub">최단거리 경로 대비 안전비용 경로의 teacher 위험 감소 vs 거리 증가. 같은 학습 가중치를
+      3개 지역에 적용. 점 위에 마우스를 올리면 안전 강도 β 별 값이 나온다.</p>
+    <div class="card">
+      <div class="chart-head">
+        <span class="chart-title">위험 감소 vs 거리 증가 (β = 안전 강도)</span>
+        <div class="legend" id="lg-fr"></div>
+      </div>
+      <div class="chart-wrap" id="w-fr"><div class="tip" id="tip-fr"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="idx">03</span> 학습된 비용 가중치</h2>
+    <p class="h2sub">표준화 nonneg Bradley-Terry. PmCostWeights(w1..w5) 대응.</p>
+    <div class="card tbl-scroll">
+      <table>
+        <thead><tr><th>항</th><th>feature</th><th>가중치</th><th>역할</th></tr></thead>
+        <tbody>
+          <tr><td>w1</td><td>거리</td><td class="w">1.0 (기본)</td><td>최단경로 베이스</td></tr>
+          <tr><td>w2</td><td>차도 회피(자전거 연속성)</td><td class="w">도메인값</td><td>(a) teacher 무관 목적</td></tr>
+          <tr class="main"><td>w3</td><td>전환 다양성</td><td class="w">0.266</td><td>(b) IRL · 전환 페널티</td></tr>
+          <tr class="main"><td>w4</td><td>교차로 밀도</td><td class="w">0.486</td><td>(b) IRL · 주 안전 페널티</td></tr>
+          <tr class="main"><td>w5</td><td>버스 밀도</td><td class="w">0.272</td><td>(b) IRL · 보조 페널티</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cost">cost(edge) = length × ( 1 + w2·차도여부 + β · [ <b>0.49</b>·교차로<sub>z</sub> + <b>0.27</b>·전환<sub>z</sub> + <b>0.27</b>·버스<sub>z</sub> ]<sub>≥0</sub> )</div>
+    <div class="callout">
+      <b>비용함수는 두 목적의 합.</b> (a) <b>자전거 연속성</b>(w2, 차도 회피)은 teacher 사고위험과 무관하므로
+      (자전거도로↔위험 corr ~0) IRL 이 아니라 <b>도메인 값</b>으로 둔다. (b) <b>사고위험</b>(w3·w4·w5)만 IRL 로 학습.
+      간선·속도·차선은 exposure-matched 설계로 사고 신호 없음. <b>⭐ 신규 발견: 편의시설(amenity) 밀도(+0.34)</b> —
+      기존 인자와 독립적인 강한 위험 인자로, w6 추가 권장.
+    </div>
+  </section>
+
+  <footer>
+    <span>PM 세이프라인 · IRL (Bradley-Terry, w≥0)</span>
+    <span>teacher: 사고 0.74~0.82 vs 대조 0.07~0.24 · 5개 지역</span>
+  </footer>
+</div>
+
+<script>
+const CORR = [
+  {f:"교차로 밀도", v:0.429}, {f:"전환 다양성", v:0.353}, {f:"편의시설 밀도 ⭐", v:0.340},
+  {f:"버스 밀도", v:0.294}, {f:"교차로까지 거리", v:-0.206}, {f:"상점 밀도", v:0.123},
+  {f:"자전거도로 근접", v:0.044}, {f:"간선 여부", v:0.072},
+];
+const FRONTIER = {
+  daejeon: [[2.1,0.7,0.5],[5.2,3.2,1.0],[10.5,7.8,2.0],[16.6,11.5,4.0],[27.2,14.8,8.0]],
+  busan:   [[1.5,7.4,0.5],[3.2,12.7,1.0],[5.2,14.6,2.0],[7.9,15.7,4.0],[12.7,17.0,8.0]],
+  cheongju:[[1.4,5.1,0.5],[2.9,6.0,1.0],[6.0,8.5,2.0],[9.2,12.8,4.0],[13.6,11.9,8.0]],
+};
+const RCOL = {daejeon:"--r0", busan:"--r1", cheongju:"--r2"};
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const NS = "http://www.w3.org/2000/svg";
+const el = (t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+/* KPIs */
+document.getElementById("kpis").innerHTML = [
+  {lab:"w4 · 교차로 밀도", val:"0.486", note:"주 안전 페널티(IRL)", cls:"accent"},
+  {lab:"IRL 안전 인자", val:"3", note:"교차로·전환·버스", cls:""},
+  {lab:"⭐ 신규 인자", val:"편의시설", note:"corr +0.34 (w6 후보)", cls:""},
+  {lab:"최대 위험 감소", val:"17%", note:"busan · β=8", cls:""},
+].map(k=>`<div class="kpi ${k.cls}"><div class="k-lab">${k.lab}</div><div class="k-val">${k.val}</div><div class="k-note">${k.note}</div></div>`).join("");
+
+/* Chart 01: correlation diverging bars */
+(function(){
+  const W=760, H=248, m={t:12,r:60,l:150,b:28};
+  const svg = el("svg",{viewBox:`0 0 ${W} ${H}`, class:"chart", role:"img", "aria-label":"feature 상관"});
+  const maxv = 0.45;
+  const x0 = m.l + (0-(-maxv))/(maxv-(-maxv))*(W-m.l-m.r);
+  const xof = v => m.l + (v-(-maxv))/(maxv-(-maxv))*(W-m.l-m.r);
+  const bh = (H-m.t-m.b)/CORR.length;
+  // gridlines at -0.4,-0.2,0,0.2,0.4
+  [-0.4,-0.2,0,0.2,0.4].forEach(g=>{
+    const x=xof(g);
+    svg.appendChild(el("line",{class:"grid-line",x1:x,x2:x,y1:m.t,y2:H-m.b, opacity:g===0?0:1}));
+    const t=el("text",{class:"tick-txt",x:x,y:H-m.b+16,"text-anchor":"middle"}); t.textContent=g.toFixed(1); svg.appendChild(t);
+  });
+  svg.appendChild(el("line",{class:"axis-line",x1:x0,x2:x0,y1:m.t,y2:H-m.b}));
+  CORR.forEach((d,i)=>{
+    const y=m.t+i*bh+bh/2, x=xof(d.v);
+    const strong = Math.abs(d.v)>=0.2;
+    const col = d.v>=0 ? (strong?cssv("--accent-solid"):cssv("--faint")) : (strong?cssv("--bad"):cssv("--faint"));
+    svg.appendChild(el("rect",{x:Math.min(x0,x), y:y-8, width:Math.abs(x-x0), height:16, rx:3, fill:col, opacity:strong?0.95:0.5}));
+    const lab=el("text",{class:"barlab",x:m.l-12,y:y+4,"text-anchor":"end"}); lab.textContent=d.f; svg.appendChild(lab);
+    const val=el("text",{class:"barval",x:d.v>=0?x+6:x-6,y:y+4,"text-anchor":d.v>=0?"start":"end"}); val.textContent=(d.v>=0?"+":"")+d.v.toFixed(3); svg.appendChild(val);
+  });
+  const xl=el("text",{class:"axis-label",x:(m.l+W-m.r)/2,y:H-4,"text-anchor":"middle"}); xl.textContent="corr( feature , teacher 위험 )"; svg.appendChild(xl);
+  document.getElementById("w-corr").appendChild(svg);
+})();
+
+/* Chart 02: tradeoff frontier (continuous xy, nearest-point hover) */
+(function(){
+  const wrap=document.getElementById("w-fr"), tip=document.getElementById("tip-fr");
+  const W=760,H=380,m={t:18,r:20,l:48,b:42};
+  const xmax=28, ymax=18;
+  const px=x=>m.l+x/xmax*(W-m.l-m.r);
+  const py=y=>H-m.b-y/ymax*(H-m.t-m.b);
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`, class:"chart", role:"img", "aria-label":"트레이드오프"});
+  for(let gx=0; gx<=28; gx+=7){ const x=px(gx); svg.appendChild(el("line",{class:"grid-line",x1:x,x2:x,y1:m.t,y2:H-m.b}));
+    const t=el("text",{class:"tick-txt",x:x,y:H-m.b+16,"text-anchor":"middle"}); t.textContent=gx; svg.appendChild(t); }
+  for(let gy=0; gy<=18; gy+=3){ const y=py(gy); svg.appendChild(el("line",{class:"grid-line",x1:m.l,x2:W-m.r,y1:y,y2:y}));
+    const t=el("text",{class:"tick-txt",x:m.l-8,y:y+3.5,"text-anchor":"end"}); t.textContent=gy; svg.appendChild(t); }
+  svg.appendChild(el("line",{class:"axis-line",x1:m.l,x2:m.l,y1:m.t,y2:H-m.b}));
+  svg.appendChild(el("line",{class:"axis-line",x1:m.l,x2:W-m.r,y1:H-m.b,y2:H-m.b}));
+  const xl=el("text",{class:"axis-label",x:W-m.r,y:H-6,"text-anchor":"end"}); xl.textContent="route distance increase (%)"; svg.appendChild(xl);
+  const yl=el("text",{class:"axis-label",x:m.l-38,y:m.t-4}); yl.textContent="risk reduction (%)"; svg.appendChild(yl);
+  const all=[];
+  Object.entries(FRONTIER).forEach(([reg,pts])=>{
+    const c=cssv(RCOL[reg]);
+    const d=pts.map((p,i)=>(i?"L":"M")+px(p[0])+" "+py(p[1])).join(" ");
+    svg.appendChild(el("path",{d,fill:"none",stroke:c,"stroke-width":2.2,"stroke-linejoin":"round"}));
+    pts.forEach(p=>{ svg.appendChild(el("circle",{cx:px(p[0]),cy:py(p[1]),r:4,fill:c}));
+      all.push({sx:px(p[0]),sy:py(p[1]),reg,dist:p[0],risk:p[1],beta:p[2],col:c}); });
+  });
+  wrap.insertBefore(svg,tip);
+  const legend=document.getElementById("lg-fr");
+  legend.innerHTML=Object.keys(FRONTIER).map(r=>`<span><span class="sw" style="background:${cssv(RCOL[r])}"></span>${r}</span>`).join("");
+  const hi=el("circle",{r:7,fill:"none","stroke-width":2,opacity:0}); svg.appendChild(hi);
+  svg.addEventListener("pointermove",ev=>{
+    const r=svg.getBoundingClientRect();
+    const mx=(ev.clientX-r.left)/r.width*W, my=(ev.clientY-r.top)/r.height*H;
+    let best=null,bd=1e9;
+    for(const p of all){ const dd=(p.sx-mx)**2+(p.sy-my)**2; if(dd<bd){bd=dd;best=p;} }
+    if(!best||bd>2500){ tip.style.opacity=0; hi.setAttribute("opacity",0); return; }
+    hi.setAttribute("cx",best.sx); hi.setAttribute("cy",best.sy); hi.setAttribute("stroke",best.col); hi.setAttribute("opacity",1);
+    tip.innerHTML=`<div class="t-h">${best.reg} · β=${best.beta}</div>`
+      +`<div class="t-row"><span>위험 감소</span><span class="v" style="color:var(--good)">−${best.risk}%</span></div>`
+      +`<div class="t-row"><span>거리 증가</span><span class="v">+${best.dist}%</span></div>`;
+    tip.style.opacity=1;
+    const tw=tip.offsetWidth,th=tip.offsetHeight;
+    let left=best.sx/W*r.width+14; if(left+tw>r.width) left=best.sx/W*r.width-tw-14;
+    let top=best.sy/H*r.height-th-10; if(top<0) top=best.sy/H*r.height+12;
+    tip.style.left=left+"px"; tip.style.top=top+"px";
+  });
+  svg.addEventListener("pointerleave",()=>{ tip.style.opacity=0; hi.setAttribute("opacity",0); });
+})();
+</script>

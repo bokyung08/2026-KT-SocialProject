@@ -17,7 +17,7 @@ bash deploy/run.sh
 
 - 처음에 빌드 후 서버를 띄우고, 이후 60초마다 `main` 을 확인해 변경이 있으면 자동 새로고침합니다.
 - 서버 설정(`PM_OSM_FILE` 등)은 프로젝트 루트 `.env` 에서 자동 로드됩니다.
-- `http://localhost:8080` 에서 확인. 종료는 `Ctrl+C`.
+- `http://localhost:21000` 에서 확인. 종료는 `Ctrl+C`.
 
 ### 로그아웃해도 계속 돌리기
 

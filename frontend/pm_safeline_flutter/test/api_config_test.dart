@@ -10,8 +10,8 @@ void main() {
       'http://10.0.2.2'
       ':8080';
   const deployedOrigin =
-      'http://cuws.duckdns.org'
-      ':8080';
+      'http3://gilit.thisisthepy.org'
+      ':443';
 
   test('dart-define API_BASE_URL 값이 현재 origin보다 우선한다', () {
     expect(

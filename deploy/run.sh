@@ -11,12 +11,14 @@
 # 환경변수:
 #   PM_BRANCH        추적 브랜치        (기본 main)
 #   PM_POLL_SECONDS  변경 확인 주기(초) (기본 60)
+#   PM_PORT          서버 포트          (기본 21000)
 # 서버 자체 설정(PM_OSM_FILE 등)은 프로젝트 루트 .env 에서 자동 로드된다.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 BRANCH="${PM_BRANCH:-main}"
 INTERVAL="${PM_POLL_SECONDS:-60}"
+PORT="${PM_PORT:-21000}"
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LAUNCHER="$APP_DIR/build/install/safety/bin/safety"   # rootProject.name=safety
 cd "$APP_DIR"
@@ -26,11 +28,10 @@ SERVER_PID=""
 build()  { echo "[run] 빌드 중..."; ./gradlew --no-daemon -q installDist; }
 
 start_server() {
-  "$LAUNCHER" &
+  "$LAUNCHER" -port="$PORT" &
   SERVER_PID=$!
-  echo "[run] 서버 시작 (pid $SERVER_PID) -> http://localhost:8080"
+  echo "[run] 서버 시작 (pid $SERVER_PID) -> http://localhost:$PORT"
 }
-
 stop_server() {
   if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
     echo "[run] 서버 중지 (pid $SERVER_PID)"

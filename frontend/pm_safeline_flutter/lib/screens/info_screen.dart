@@ -6,16 +6,51 @@ import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 
 class InfoScreen extends StatelessWidget {
-  const InfoScreen({super.key, required this.controller});
+  const InfoScreen({
+    super.key,
+    required this.controller,
+    this.desktopPanel = false,
+  });
+
   final AppController controller;
+  final bool desktopPanel;
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: ListView(
-      padding: const EdgeInsets.all(20),
+  Widget build(BuildContext context) {
+    final content = ListView(
+      key: desktopPanel ? const ValueKey('desktop-info-panel') : null,
+      padding: EdgeInsets.fromLTRB(
+        desktopPanel ? 24 : 20,
+        desktopPanel ? 24 : 20,
+        desktopPanel ? 24 : 20,
+        20,
+      ),
       children: [
-        Text('서비스 정보', style: Theme.of(context).textTheme.headlineSmall),
+        if (desktopPanel)
+          Row(
+            children: [
+              IconButton(
+                key: const ValueKey('desktop-info-back'),
+                onPressed: () => controller.show(AppScreen.home),
+                icon: const Icon(Icons.arrow_back),
+                tooltip: '홈으로',
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '서비스 정보',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ),
+            ],
+          )
+        else
+          Text('서비스 정보', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
-        const Text('PM 이용자가 자전거도로의 단절과 위험 도로구조를 피하도록 연속주행 안전 경로를 제안합니다.'),
+        const Text(
+          'PM 이용자가 자전거도로의 단절과 위험 도로구조를 피하도록 '
+          '연속주행 안전 경로를 제안합니다.',
+        ),
         const SizedBox(height: 20),
         _card(
           '현재 실행 모드',
@@ -37,9 +72,15 @@ class InfoScreen extends StatelessWidget {
           Icons.info_outline,
         ),
       ],
-    ),
-    bottomNavigationBar: SafeLineBottomNav(controller: controller, index: 1),
-  );
+    );
+
+    if (desktopPanel) return ColoredBox(color: Colors.white, child: content);
+    return Scaffold(
+      body: content,
+      bottomNavigationBar: SafeLineBottomNav(controller: controller, index: 1),
+    );
+  }
+
   Widget _card(String title, String body, IconData icon) => Container(
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(16),

@@ -312,7 +312,7 @@ void main() {
     expect(find.text('12.3km'), findsOneWidget);
     expect(find.text('91점'), findsOneWidget);
     expect(find.text('95%'), findsOneWidget);
-    expect(find.textContaining('전환 4회'), findsOneWidget);
+    expect(find.textContaining('전환은 4회'), findsOneWidget);
 
     final accessLayer = tester.widget<PolylineLayer>(
       find.byKey(const ValueKey('rental-access-polyline')),
@@ -324,6 +324,7 @@ void main() {
     expect(accessLayer.polylines.single.strokeWidth, lessThan(3));
     expect(mainLayer.polylines.single.points.length, greaterThan(2));
     expect(mainLayer.polylines.single.strokeWidth, 6);
+    expect(mainLayer.polylines.single.color, AppColors.safe);
   });
 
   testWidgets('모바일 viewport에서는 대여소 sheet가 화면 너비를 사용한다', (tester) async {
@@ -371,6 +372,104 @@ void main() {
     expect(controller.screen, AppScreen.input);
     expect(controller.routeSearchTarget, RouteSearchTarget.destination);
   });
+
+  testWidgets('390px 모바일은 기존 상단 검색과 하단 패널을 유지한다', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _resultApp(_resultController(), width: 390, height: 844),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('route-summary-pill')), findsOneWidget);
+    expect(find.byKey(const ValueKey('search-again-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('responsive-side-panel')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('800px 태블릿은 320px 사이드 패널과 나머지 지도 영역을 사용한다', (tester) async {
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _resultApp(_resultController(), width: 800, height: 1280),
+    );
+    await tester.pump();
+
+    final panelRect = tester.getRect(
+      find.byKey(const ValueKey('responsive-side-panel')),
+    );
+    final mapRect = tester.getRect(find.byType(RouteMap));
+    expect(panelRect.width, closeTo(320, 1));
+    expect(mapRect.left, closeTo(320, 1));
+    expect(mapRect.width, closeTo(480, 1));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics && widget.properties.label == '경로 정보 패널 접기',
+      ),
+      findsAtLeastNWidgets(1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('1440px PC는 380px 패널을 쓰고 탭으로 지도를 전체 폭까지 확장한다', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _resultApp(_resultController(), width: 1440, height: 900),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getRect(find.byKey(const ValueKey('responsive-side-panel'))).width,
+      closeTo(380, 1),
+    );
+    expect(tester.getRect(find.byType(RouteMap)).left, closeTo(380, 1));
+
+    await tester.tap(find.byKey(const ValueKey('desktop-panel-toggle')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 240));
+
+    final expandedMapRect = tester.getRect(find.byType(RouteMap));
+    expect(expandedMapRect.left, closeTo(0, 1));
+    expect(expandedMapRect.width, closeTo(1440, 1));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics && widget.properties.label == '경로 정보 패널 열기',
+      ),
+      findsAtLeastNWidgets(1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('넓은 화면의 지도 크게보기는 패널을 자동으로 접고 탭을 유지한다', (tester) async {
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _resultApp(_resultController(), width: 800, height: 1280),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('map-focus-mode-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 240));
+
+    expect(tester.getRect(find.byType(RouteMap)).left, closeTo(0, 1));
+    expect(find.byKey(const ValueKey('desktop-panel-toggle')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 AppController _resultController({RouteRepository? repository}) {
@@ -414,18 +513,22 @@ Widget _resultApp(
   RouteMapController? mapController,
   LatLng? currentLocation,
   RentalStationService? rentalStationService,
+  double width = 430,
+  double height = 800,
 }) => MaterialApp(
   theme: buildAppTheme(),
-  home: SizedBox(
-    width: 430,
-    height: 800,
-    child: RouteResultScreen(
-      controller: controller,
-      rentalStationService:
-          rentalStationService ??
-          const MockRentalStationService(delay: Duration.zero),
-      mapController: mapController,
-      currentLocation: currentLocation,
+  home: Center(
+    child: SizedBox(
+      width: width,
+      height: height,
+      child: RouteResultScreen(
+        controller: controller,
+        rentalStationService:
+            rentalStationService ??
+            const MockRentalStationService(delay: Duration.zero),
+        mapController: mapController,
+        currentLocation: currentLocation,
+      ),
     ),
   ),
 );

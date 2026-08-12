@@ -36,6 +36,7 @@ class AppController extends ChangeNotifier {
   int selectedRoute = 0;
   String? error;
   bool analysisResponseReady = false;
+  bool desktopPanelOpen = true;
   RouteSearchTarget routeSearchTarget = RouteSearchTarget.start;
 
   int _analysisGeneration = 0;
@@ -140,6 +141,14 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDesktopPanelOpen(bool value) {
+    if (desktopPanelOpen == value) return;
+    desktopPanelOpen = value;
+    notifyListeners();
+  }
+
+  void toggleDesktopPanel() => setDesktopPanelOpen(!desktopPanelOpen);
+
   void cancelAnalysis() {
     if (screen != AppScreen.loading) return;
     _analysisGeneration++;
@@ -204,6 +213,42 @@ class AppController extends ChangeNotifier {
       screen = AppScreen.input;
     }
     if (_isCurrentAnalysis(generation)) notifyListeners();
+  }
+
+  Future<String?> analyzeDraft(Place draftStart, Place draftDestination) async {
+    final generation = ++_analysisGeneration;
+    try {
+      final nextRoutes = await repository.findRoutes(
+        draftStart,
+        draftDestination,
+      );
+      if (!_isCurrentAnalysis(generation)) return '경로 요청이 취소되었습니다.';
+
+      start = draftStart;
+      destination = draftDestination;
+      recentRouteStart = draftStart;
+      recentRouteDestination = draftDestination;
+      _clearRentalAccess();
+      _remember(draftStart);
+      _remember(draftDestination);
+      routes = nextRoutes;
+      selectedRoute = 0;
+      analysisResponseReady = false;
+      error = null;
+      screen = AppScreen.result;
+      notifyListeners();
+      return null;
+    } on RouteRepositoryException catch (exception) {
+      if (!_isCurrentAnalysis(generation)) return '경로 요청이 취소되었습니다.';
+      return exception.message;
+    } catch (_) {
+      if (!_isCurrentAnalysis(generation)) return '경로 요청이 취소되었습니다.';
+      return '경로를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';
+    }
+  }
+
+  void cancelDraftAnalysis() {
+    _analysisGeneration++;
   }
 
   @override

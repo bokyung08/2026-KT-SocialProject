@@ -15,6 +15,7 @@ import '../utils/formatters.dart';
 import '../utils/route_recommendation_reason.dart';
 import '../widgets/desktop_route_search_panel.dart';
 import '../widgets/map_floating_controls.dart';
+import '../widgets/mobile_route_selector.dart';
 import '../widgets/responsive_map_shell.dart';
 import '../widgets/route_map.dart';
 import '../widgets/route_recommendation_reason_card.dart';
@@ -55,6 +56,10 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
   Place? _previewDestination;
   bool _loadingStations = false;
   String? _stationError;
+  final _mapAreaKey = GlobalKey();
+  final _mobileHeaderKey = GlobalKey();
+  final _rentalToggleKey = GlobalKey();
+  final _mapControlsKey = GlobalKey();
   final _dashboardKey = GlobalKey();
   double? _dashboardHeight;
   bool _dashboardMeasurementScheduled = false;
@@ -90,7 +95,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
   }
 
   void _scheduleDashboardMeasurement() {
-    if (_dashboardMeasurementScheduled || _mapFocusMode) return;
+    if (_dashboardMeasurementScheduled) return;
     _dashboardMeasurementScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _dashboardMeasurementScheduled = false;
@@ -167,7 +172,57 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
         widget.currentLocation ??
         widget.controller.start?.position ??
         (selectedRoute.geometry.isEmpty ? null : selectedRoute.geometry.first);
-    if (target != null) _routeMapController.moveTo(target, zoom: 15.5);
+    if (target == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final usableRect = _currentLocationUsableRect();
+      if (usableRect == null) {
+        _routeMapController.moveTo(target, zoom: 15.5);
+        return;
+      }
+      _routeMapController.moveToVisibleCenter(
+        target,
+        usableRect: usableRect,
+        zoom: 15.5,
+      );
+    });
+  }
+
+  Rect? _rectInMap(GlobalKey key, RenderBox mapBox) {
+    final renderObject = key.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+    final globalOrigin = renderObject.localToGlobal(Offset.zero);
+    return mapBox.globalToLocal(globalOrigin) & renderObject.size;
+  }
+
+  Rect? _currentLocationUsableRect() {
+    final renderObject = _mapAreaKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+
+    final safePadding = MediaQuery.paddingOf(context);
+    const edgeMargin = 16.0;
+    final left = edgeMargin + safePadding.left;
+    var top = edgeMargin + safePadding.top;
+    var right = renderObject.size.width - edgeMargin - safePadding.right;
+    var bottom = renderObject.size.height - edgeMargin - safePadding.bottom;
+
+    final headerRect = _rectInMap(_mobileHeaderKey, renderObject);
+    if (headerRect != null) top = math.max(top, headerRect.bottom + 12);
+
+    for (final key in [_rentalToggleKey, _mapControlsKey]) {
+      final controlsRect = _rectInMap(key, renderObject);
+      if (controlsRect != null) {
+        right = math.min(right, controlsRect.left - 12);
+      }
+    }
+
+    final dashboardRect = _rectInMap(_dashboardKey, renderObject);
+    if (dashboardRect != null) {
+      bottom = math.min(bottom, dashboardRect.top - 12);
+    }
+
+    if (right <= left || bottom <= top) return null;
+    return Rect.fromLTRB(left, top, right, bottom);
   }
 
   void _fitEntireRoute() => _routeMapController.fitRoute();
@@ -512,6 +567,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
   }) {
     final topBase = safePadding.top;
     return Stack(
+      key: _mapAreaKey,
       children: [
         Positioned.fill(
           child: RouteMap(
@@ -537,7 +593,10 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
             top: 12 + topBase,
             left: 12,
             right: 12,
-            child: _buildMobileRouteHeader(),
+            child: KeyedSubtree(
+              key: _mobileHeaderKey,
+              child: _buildMobileRouteHeader(),
+            ),
           )
         else if (showCollapsedBackButton)
           Positioned(
@@ -553,29 +612,35 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
         Positioned(
           top: (isWide ? 12 : 68) + topBase,
           right: 12,
-          child: FilterChip(
-            key: const ValueKey('rental-station-toggle'),
-            selected: _showRentalStations,
-            onSelected: _toggleRentalStations,
-            avatar: const Icon(Icons.pedal_bike, size: 18),
-            label: const Text('타슈'),
-            backgroundColor: Colors.white,
-            selectedColor: const Color(0xFFEAF7F0),
-            side: BorderSide(
-              color: _showRentalStations
-                  ? const Color(0xFF20A464)
-                  : AppColors.border,
+          child: KeyedSubtree(
+            key: _rentalToggleKey,
+            child: FilterChip(
+              key: const ValueKey('rental-station-toggle'),
+              selected: _showRentalStations,
+              onSelected: _toggleRentalStations,
+              avatar: const Icon(Icons.pedal_bike, size: 18),
+              label: const Text('타슈'),
+              backgroundColor: Colors.white,
+              selectedColor: const Color(0xFFEAF7F0),
+              side: BorderSide(
+                color: _showRentalStations
+                    ? const Color(0xFF20A464)
+                    : AppColors.border,
+              ),
             ),
           ),
         ),
         Positioned(
           top: (isWide ? 68 : 124) + topBase,
           right: 12,
-          child: MapFloatingControls(
-            focusMode: _mapFocusMode,
-            onCurrentLocation: _moveToCurrentOrRouteStart,
-            onFitRoute: _fitEntireRoute,
-            onToggleFocusMode: _toggleMapFocusMode,
+          child: KeyedSubtree(
+            key: _mapControlsKey,
+            child: MapFloatingControls(
+              focusMode: _mapFocusMode,
+              onCurrentLocation: _moveToCurrentOrRouteStart,
+              onFitRoute: _fitEntireRoute,
+              onToggleFocusMode: _toggleMapFocusMode,
+            ),
           ),
         ),
         if (_showRentalStations &&
@@ -1039,19 +1104,10 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SegmentedButton<int>(
-        segments: [
-          for (final (index, item) in routes.indexed)
-            ButtonSegment(
-              value: index,
-              label: Text('${item.name} · ${_routeTypeLabel(index)}'),
-            ),
-        ],
-        selected: {widget.controller.selectedRoute},
-        onSelectionChanged: (values) => _selectRoute(values.first),
-      ),
+    return MobileRouteSelector(
+      itemCount: routes.length,
+      selectedIndex: widget.controller.selectedRoute,
+      onSelected: _selectRoute,
     );
   }
 

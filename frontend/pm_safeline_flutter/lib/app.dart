@@ -51,14 +51,7 @@ class _SafeLineAppState extends State<SafeLineApp> {
 
         return ColoredBox(
           color: const Color(0xFFECECEF),
-          child: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
-                child: _screen(),
-              ),
-            ),
-          ),
+          child: SafeArea(child: SizedBox.expand(child: _screen())),
         );
       },
     ),

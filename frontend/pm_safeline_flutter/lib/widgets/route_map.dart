@@ -10,14 +10,34 @@ import 'rental_station_layer.dart';
 class RouteMapController {
   _RouteMapState? _state;
   LatLng? _lastMoveTarget;
+  LatLng? _lastCameraCenter;
+  Rect? _lastUsableRect;
+  double? _lastMoveZoom;
   int _fitRequestCount = 0;
 
   LatLng? get lastMoveTarget => _lastMoveTarget;
+  LatLng? get lastCameraCenter => _lastCameraCenter;
+  Rect? get lastUsableRect => _lastUsableRect;
+  double? get lastMoveZoom => _lastMoveZoom;
   int get fitRequestCount => _fitRequestCount;
 
   void moveTo(LatLng point, {double zoom = 15}) {
     _lastMoveTarget = point;
+    _lastCameraCenter = point;
+    _lastUsableRect = null;
+    _lastMoveZoom = zoom;
     _state?._moveTo(point, zoom);
+  }
+
+  void moveToVisibleCenter(
+    LatLng point, {
+    required Rect usableRect,
+    double zoom = 15,
+  }) {
+    _lastMoveTarget = point;
+    _lastUsableRect = usableRect;
+    _lastMoveZoom = zoom;
+    _lastCameraCenter = _state?._moveToVisibleCenter(point, usableRect, zoom);
   }
 
   void fitRoute() {
@@ -119,6 +139,26 @@ class _RouteMapState extends State<RouteMap> {
   void _moveTo(LatLng point, double zoom) {
     if (!mounted) return;
     _mapController.move(point, zoom);
+  }
+
+  LatLng? _moveToVisibleCenter(LatLng point, Rect usableRect, double zoom) {
+    if (!mounted) return null;
+    final camera = _mapController.camera;
+    final mapRect = Offset.zero & camera.size;
+    final visibleRect = usableRect.intersect(mapRect);
+    if (visibleRect.isEmpty) {
+      _mapController.move(point, zoom);
+      return point;
+    }
+
+    final targetOffset = visibleRect.center - mapRect.center;
+    final projectedTarget = camera.projectAtZoom(point, zoom);
+    final cameraCenter = camera.unprojectAtZoom(
+      projectedTarget - targetOffset,
+      zoom,
+    );
+    _mapController.move(cameraCenter, zoom);
+    return cameraCenter;
   }
 
   void _fit() {

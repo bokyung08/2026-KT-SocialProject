@@ -9,8 +9,134 @@ import 'package:pm_safeline_flutter/models/route_result.dart';
 import 'package:pm_safeline_flutter/repositories/route_repository.dart';
 import 'package:pm_safeline_flutter/screens/loading_screen.dart';
 import 'package:pm_safeline_flutter/theme/app_theme.dart';
+import 'package:pm_safeline_flutter/widgets/route_analysis_loading.dart';
 
 void main() {
+  for (final size in const [
+    Size(320, 568),
+    Size(360, 800),
+    Size(390, 844),
+    Size(430, 932),
+    Size(500, 900),
+    Size(599, 900),
+  ]) {
+    testWidgets('${size.width.round()}px 로딩 화면은 전체 너비 중앙을 사용한다', (
+      tester,
+    ) async {
+      _setViewport(tester, size);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: RouteAnalysisLoading(responseReady: true, onCancel: () {}),
+          ),
+        ),
+      );
+
+      final screenCenterX = size.width / 2;
+      for (final key in const [
+        'route-analysis-loading',
+        'analysis-path-animation',
+        'analysis-title',
+        'analysis-description',
+        'analysis-step-list',
+        'cancel-route-analysis',
+      ]) {
+        expect(
+          tester.getCenter(find.byKey(ValueKey(key))).dx,
+          closeTo(screenCenterX, 0.5),
+        );
+      }
+
+      final rootRect = tester.getRect(
+        find.byKey(const ValueKey('route-analysis-loading')),
+      );
+      final listRect = tester.getRect(
+        find.byKey(const ValueKey('analysis-step-list')),
+      );
+      expect(rootRect.left, 0);
+      expect(rootRect.width, size.width);
+      expect(listRect.width, lessThanOrEqualTo(350));
+      expect(listRect.left, closeTo(size.width - listRect.right, 0.5));
+      expect(
+        tester
+            .widget<Text>(
+              find
+                  .descendant(
+                    of: find.byKey(const ValueKey('analysis-step-list')),
+                    matching: find.byType(Text),
+                  )
+                  .first,
+            )
+            .textAlign,
+        anyOf(isNull, TextAlign.start, TextAlign.left),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final size in const [Size(600, 960), Size(800, 1280)]) {
+    testWidgets('${size.width.round()}px 로딩은 왼쪽 패널 중앙을 유지한다', (tester) async {
+      _setViewport(tester, size);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: 320,
+              height: size.height,
+              child: RouteAnalysisLoading(responseReady: true, onCancel: () {}),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        tester
+            .getCenter(find.byKey(const ValueKey('analysis-path-animation')))
+            .dx,
+        closeTo(160, 0.5),
+      );
+      expect(
+        tester.getCenter(find.byKey(const ValueKey('analysis-step-list'))).dx,
+        closeTo(160, 0.5),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('브라우저 너비 변경 후 로딩 중심을 다시 계산한다', (tester) async {
+    _setViewport(tester, const Size(500, 900));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RouteAnalysisLoading(responseReady: true, onCancel: () {}),
+        ),
+      ),
+    );
+    expect(
+      tester
+          .getCenter(find.byKey(const ValueKey('analysis-path-animation')))
+          .dx,
+      closeTo(250, 0.5),
+    );
+
+    tester.view.physicalSize = const Size(599, 900);
+    await tester.pump();
+
+    expect(
+      tester
+          .getCenter(find.byKey(const ValueKey('analysis-path-animation')))
+          .dx,
+      closeTo(299.5, 0.5),
+    );
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('cancel-route-analysis'))).dx,
+      closeTo(299.5, 0.5),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('안전 경로 분석 화면에 경로 애니메이션과 4개 단계를 표시한다', (tester) async {
     final repository = _DeferredRouteRepository();
     final controller = _controller(repository);
@@ -112,4 +238,11 @@ class _DeferredRouteRepository implements RouteRepository {
       ),
     ]);
   }
+}
+
+void _setViewport(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
 }

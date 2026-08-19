@@ -165,7 +165,7 @@ void main() {
   });
 
   testWidgets('지도 조작 버튼은 위치 이동, 전체보기, 집중 모드를 제공한다', (tester) async {
-    tester.view.physicalSize = const Size(430, 844);
+    tester.view.physicalSize = const Size(430, 932);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -192,7 +192,18 @@ void main() {
     expect(find.byIcon(Icons.remove), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('map-current-location-button')));
+    await tester.pump();
     expect(mapController.lastMoveTarget, currentLocation);
+    expect(mapController.lastMoveZoom, 15.5);
+    final expandedUsableRect = mapController.lastUsableRect!;
+    expect(expandedUsableRect.center.dy, lessThan(932 / 2));
+    expect(expandedUsableRect.bottom, lessThan(932 - 300));
+    expect(mapController.lastCameraCenter, isNot(currentLocation));
+
+    final firstCameraCenter = mapController.lastCameraCenter;
+    await tester.tap(find.byKey(const ValueKey('map-current-location-button')));
+    await tester.pump();
+    expect(mapController.lastCameraCenter, firstCameraCenter);
 
     final fitRequests = mapController.fitRequestCount;
     await tester.tap(find.byKey(const ValueKey('map-fit-route-button')));
@@ -213,9 +224,45 @@ void main() {
         .bottom;
     expect(focusedPadding, lessThan(expandedPadding));
 
+    await tester.tap(find.byKey(const ValueKey('map-current-location-button')));
+    await tester.pump();
+    expect(
+      mapController.lastUsableRect!.bottom,
+      greaterThan(expandedUsableRect.bottom),
+    );
+    expect(mapController.lastMoveZoom, 15.5);
+
     await tester.tap(find.byKey(const ValueKey('map-focus-mode-button')));
     await tester.pump();
     expect(find.byKey(const ValueKey('search-again-button')), findsOneWidget);
+  });
+
+  testWidgets('390x844에서 현재 위치는 펼쳐진 대시보드 위 중심에 표시된다', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = _resultController();
+    final mapController = RouteMapController();
+    const currentLocation = LatLng(36.355, 127.39);
+    await tester.pumpWidget(
+      _resultApp(
+        controller,
+        mapController: mapController,
+        currentLocation: currentLocation,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('map-current-location-button')));
+    await tester.pump();
+
+    final usableRect = mapController.lastUsableRect!;
+    expect(usableRect.center.dy, lessThan(844 / 2));
+    expect(usableRect.bottom, lessThan(844 - 300));
+    expect(mapController.lastMoveTarget, currentLocation);
+    expect(mapController.lastCameraCenter, isNot(currentLocation));
   });
 
   testWidgets('현재 위치가 없으면 지도 위치 버튼은 출발지로 이동한다', (tester) async {
@@ -226,6 +273,7 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('map-current-location-button')));
+    await tester.pump();
     expect(mapController.lastMoveTarget, controller.start!.position);
   });
 
@@ -390,6 +438,59 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('모바일 후보 탭 선택은 API 재호출 없이 지표와 설명을 갱신한다', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = _resultController();
+    controller.routes = [
+      ...controller.routes,
+      const RouteResult(
+        name: '대안 경로 2',
+        distanceMeters: 4800,
+        durationMillis: 900000,
+        weight: 1400,
+        safetyScore: 65,
+        bikeInfraRatio: .42,
+        transitionCount: 5,
+        geometry: [
+          LatLng(36.3504, 127.3845),
+          LatLng(36.3620, 127.3720),
+          LatLng(36.3741, 127.3604),
+        ],
+      ),
+      const RouteResult(
+        name: '대안 경로 3',
+        distanceMeters: 6100,
+        durationMillis: 1300000,
+        weight: 1700,
+        safetyScore: 58,
+        bikeInfraRatio: .31,
+        transitionCount: 6,
+        geometry: [
+          LatLng(36.3504, 127.3845),
+          LatLng(36.3580, 127.3780),
+          LatLng(36.3670, 127.3690),
+          LatLng(36.3741, 127.3604),
+        ],
+      ),
+    ];
+    await tester.pumpWidget(_resultApp(controller, width: 390, height: 844));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('mobile-route-option-2')));
+    await tester.pump();
+
+    expect(controller.selectedRoute, 2);
+    expect(find.text('58점'), findsOneWidget);
+    expect(find.text('31%'), findsOneWidget);
+    expect(find.text('이 경로의 특징'), findsOneWidget);
+    expect(find.text('대안 경로 3'), findsAtLeastNWidgets(1));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('800px 태블릿은 320px 사이드 패널과 나머지 지도 영역을 사용한다', (tester) async {
     tester.view.physicalSize = const Size(800, 1280);
     tester.view.devicePixelRatio = 1;
@@ -469,6 +570,42 @@ void main() {
     expect(tester.getRect(find.byType(RouteMap)).left, closeTo(0, 1));
     expect(find.byKey(const ValueKey('desktop-panel-toggle')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('넓은 화면의 현재 위치는 최신 지도 크기만 기준으로 보정한다', (tester) async {
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final mapController = RouteMapController();
+    await tester.pumpWidget(
+      _resultApp(
+        _resultController(),
+        width: 800,
+        height: 1280,
+        mapController: mapController,
+        currentLocation: const LatLng(36.355, 127.39),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('map-current-location-button')));
+    await tester.pump();
+    final panelOpenRect = mapController.lastUsableRect!;
+    expect(panelOpenRect.left, 16);
+    expect(panelOpenRect.bottom, 1264);
+
+    await tester.tap(find.byKey(const ValueKey('map-focus-mode-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 240));
+    await tester.tap(find.byKey(const ValueKey('map-current-location-button')));
+    await tester.pump();
+
+    final fullMapRect = mapController.lastUsableRect!;
+    expect(fullMapRect.width, greaterThan(panelOpenRect.width + 250));
+    expect(fullMapRect.bottom, 1264);
+    expect(mapController.lastMoveZoom, 15.5);
   });
 }
 

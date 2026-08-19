@@ -91,75 +91,85 @@ class _RouteAnalysisLoadingState extends State<RouteAnalysisLoading>
 
   @override
   Widget build(BuildContext context) => ColoredBox(
+    key: const ValueKey('route-analysis-loading'),
     color: const Color(0xFFFAFAFB),
     child: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-        child: Column(
-          children: [
-            const Spacer(flex: 2),
-            SizedBox(
-              key: const ValueKey('analysis-path-animation'),
-              width: 270,
-              height: 145,
-              child: AnimatedBuilder(
-                animation: _pathController,
-                builder: (context, _) => CustomPaint(
-                  painter: _RoutePathPainter(
-                    progress: Curves.easeInOutCubic.transform(
-                      _pathController.value,
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+          child: Column(
+            children: [
+              const Spacer(flex: 2),
+              SizedBox(
+                key: const ValueKey('analysis-path-animation'),
+                width: 270,
+                height: 145,
+                child: AnimatedBuilder(
+                  animation: _pathController,
+                  builder: (context, _) => CustomPaint(
+                    painter: _RoutePathPainter(
+                      progress: Curves.easeInOutCubic.transform(
+                        _pathController.value,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 28),
-            Text(
-              '안전 경로를 분석하고 있어요',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              '도로 연결 상태와 위험 요소를 차분히 살펴보는 중이에요.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted, height: 1.45),
-            ),
-            const SizedBox(height: 34),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 310),
-              child: Column(
-                children: [
-                  for (final (index, label) in _steps.indexed)
-                    _AnalysisStep(
-                      label: label,
-                      state: index < _currentStep
-                          ? _AnalysisStepState.completed
-                          : index == _currentStep
-                          ? _AnalysisStepState.current
-                          : _AnalysisStepState.pending,
-                      pulse: _pulseController,
-                    ),
-                ],
-              ),
-            ),
-            const Spacer(flex: 3),
-            TextButton(
-              key: const ValueKey('cancel-route-analysis'),
-              onPressed: widget.onCancel,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.secondary,
-                textStyle: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(height: 28),
+              Text(
+                key: const ValueKey('analysis-title'),
+                '안전 경로를 분석하고 있어요',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              child: const Text('취소'),
-            ),
-          ],
+              const SizedBox(height: 10),
+              const Text(
+                key: ValueKey('analysis-description'),
+                '도로 연결 상태와 위험 요소를 차분히 살펴보는 중이에요.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.muted, height: 1.45),
+              ),
+              const SizedBox(height: 34),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 350),
+                child: SizedBox(
+                  key: const ValueKey('analysis-step-list'),
+                  width: double.infinity,
+                  child: Column(
+                    children: [
+                      for (final (index, label) in _steps.indexed)
+                        _AnalysisStep(
+                          label: label,
+                          state: index < _currentStep
+                              ? _AnalysisStepState.completed
+                              : index == _currentStep
+                              ? _AnalysisStepState.current
+                              : _AnalysisStepState.pending,
+                          pulse: _pulseController,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const Spacer(flex: 3),
+              TextButton(
+                key: const ValueKey('cancel-route-analysis'),
+                onPressed: widget.onCancel,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.secondary,
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: const Text('취소'),
+              ),
+            ],
+          ),
         ),
       ),
     ),

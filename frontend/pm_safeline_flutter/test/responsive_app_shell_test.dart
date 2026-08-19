@@ -16,6 +16,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final size in const [
+    Size(360, 800),
+    Size(390, 844),
+    Size(430, 932),
+    Size(500, 900),
+    Size(599, 900),
+  ]) {
+    testWidgets('${size.width.round()}px 모바일은 전체 화면 너비를 사용한다', (tester) async {
+      _setViewport(tester, size);
+      await tester.pumpWidget(const SafeLineApp());
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('desktop-app-shell')), findsNothing);
+      expect(find.byKey(const ValueKey('responsive-side-panel')), findsNothing);
+      expect(find.byType(NavigationBar), findsOneWidget);
+
+      final scaffoldRect = tester.getRect(find.byType(Scaffold));
+      final navigationRect = tester.getRect(find.byType(NavigationBar));
+      final mapRect = tester.getRect(find.byType(RouteMap));
+      expect(scaffoldRect.left, 0);
+      expect(scaffoldRect.width, size.width);
+      expect(navigationRect.left, 0);
+      expect(navigationRect.width, size.width);
+      expect(mapRect.left, 20);
+      expect(mapRect.right, size.width - 20);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final viewport in const [
     (size: Size(600, 960), panelWidth: 320.0),
     (size: Size(800, 1280), panelWidth: 320.0),

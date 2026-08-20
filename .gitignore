@@ -223,6 +223,9 @@ cython_debug/
 .idea/
 *.*~
 
+# VS Code
+.vscode/
+
 # Ruff stuff:
 .ruff_cache/
 
@@ -236,6 +239,7 @@ results/
 results-*/
 wandb/
 logs/
+/checkpoints/
 trainer_output/
 
 # AI Agent
@@ -263,9 +267,3 @@ frontend/pm_safeline_flutter/.flutter-plugins*
 # openAPI(swagger) codegen build artifacts
 /docs/.swagger-codegen/
 /docs/.swagger-codegen-ignore
-
-
-# 데이터셋 릴리스 asset / 체크포인트 / 임시 스크립트 (GitHub 제외)
-*.zip
-/checkpoints/
-scratch_*.py

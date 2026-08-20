@@ -7,9 +7,8 @@
 # 로그아웃해도 계속 돌리려면 백그라운드 작업(Start-Process)이나
 # Windows 작업 스케줄러에 등록해서 실행할 것.
 #
-# 워킹 디렉터리에 커밋되지 않은 변경사항이 있으면 자동 반영을 건너뛰고
-# 경고만 남긴다 (git reset --hard로 작업 중인 변경사항을 지우지 않는다).
-# 그 상태로 남아있으면 직접 정리한 뒤 다음 주기에 자동 반영된다.
+# 매 주기 `git pull`만 시도한다. 실패하면(충돌, 네트워크 등) 그냥 무시하고
+# 다음 주기에 재시도한다 — 어떤 경우에도 이미 떠 있는 서버는 건드리지 않는다.
 #
 # 환경변수:
 #   PM_BRANCH        추적 브랜치        (기본 main)
@@ -85,33 +84,23 @@ try {
             Start-Server
         }
 
-        try {
-            git fetch --quiet origin $Branch
-        } catch {
-            Write-Output "[run] git fetch 실패, 다음 주기 재시도"
-            continue
-        }
-
-        $Local = (git rev-parse HEAD).Trim()
-        $Remote = (git rev-parse "origin/$Branch").Trim()
-        if ($Local -eq $Remote) { continue }
-
-        if ((git status --porcelain)) {
-            Write-Output "[run] 커밋되지 않은 로컬 변경사항이 있어 반영을 건너뜁니다 (직접 정리 필요)"
-            continue
-        }
-
-        Write-Output "[run] 새 커밋 감지 $($Local.Substring(0,7)) -> $($Remote.Substring(0,7)) : 새로고침"
-        # 워킹 디렉터리가 깨끗할 때만 fast-forward한다 (--ff-only는 되돌릴 로컬
-        # 변경이 없으므로 안전 — reset --hard처럼 작업 내용을 지우지 않는다)
-        git merge --ff-only "origin/$Branch"
+        $before = (& git rev-parse HEAD 2>$null)
+        & git pull --quiet 2>$null
         if ($LASTEXITCODE -ne 0) {
-            Write-Output "[run] fast-forward 실패, 다음 주기 재시도"
+            Write-Output "[run] git pull 실패 (exit $LASTEXITCODE), 다음 주기 재시도"
             continue
         }
-        Stop-Server
-        Build-App
-        Start-Server
+        $after = (& git rev-parse HEAD 2>$null)
+        if ($before -eq $after) { continue }
+
+        Write-Output "[run] 새 커밋 감지 -> 새로고침"
+        try {
+            Stop-Server
+            Build-App
+            Start-Server
+        } catch {
+            Write-Output "[run] 새로고침 실패, 다음 주기 재시도: $_"
+        }
     }
 }
 finally {

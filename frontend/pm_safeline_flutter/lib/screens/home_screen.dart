@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../app_controller.dart';
 import '../data/sample_places.dart';
+import '../models/place.dart';
+import '../services/current_location_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
+import '../widgets/desktop_tab_bar.dart';
 import '../widgets/route_map.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -12,13 +16,11 @@ class HomeScreen extends StatelessWidget {
     required this.controller,
     this.desktopPanel = false,
     this.onDesktopNewRoute,
-    this.onDesktopEditRecentRoute,
   });
 
   final AppController controller;
   final bool desktopPanel;
   final VoidCallback? onDesktopNewRoute;
-  final VoidCallback? onDesktopEditRecentRoute;
 
   @override
   Widget build(BuildContext context) =>
@@ -32,17 +34,25 @@ class HomeScreen extends StatelessWidget {
         children: [
           _brandHeader(context),
           const SizedBox(height: 6),
-          const Text('끊김은 줄이고, 안전한 길은 이어 드려요.'),
+          const Text('길잇, 끊김은 줄이고 안전한 길은 이어드려요.'),
           const SizedBox(height: 18),
           FilledButton.icon(
             onPressed: onDesktopNewRoute ?? controller.startNewRoute,
             icon: const Icon(Icons.add),
             label: const Text('새 경로 탐색'),
           ),
-          const SizedBox(height: 18),
-          Text('최근 경로', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 10),
-          _recentRouteCard(),
+          if (controller.hasRecentRoute) ...[
+            const SizedBox(height: 18),
+            Text('최근 경로', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            _recentRouteCard(),
+          ],
+          if (controller.favorites.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text('즐겨찾는 경로', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            ..._favoriteCards(),
+          ],
           const SizedBox(height: 18),
           Text('대전에서 시작해 볼까요?', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 10),
@@ -50,6 +60,11 @@ class HomeScreen extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: RouteMap(
+                // 최근 경로/즐겨찾기가 비동기로 로드되며 위쪽 콘텐츠 높이가 바뀌면
+                // 이 Expanded의 크기도 함께 바뀐다. 첫 프레임 크기 기준으로 시작한
+                // 타일 요청이 그 리사이즈에 취소돼 버리는 걸 막기 위해, 로드가
+                // 끝난 뒤(최종 레이아웃이 확정된 뒤) 지도를 한 번 새로 마운트한다.
+                key: ValueKey('home-map-${controller.historyLoaded}'),
                 start: samplePlaces[0].position,
                 destination: samplePlaces[1].position,
               ),
@@ -73,7 +88,7 @@ class HomeScreen extends StatelessWidget {
               _brandHeader(context),
               const SizedBox(height: 8),
               const Text(
-                '끊김은 줄이고, 안전한 길은 이어 드려요.',
+                '길잇, 끊김은 줄이고 안전한 길은 이어드려요.',
                 style: TextStyle(color: AppColors.secondary, height: 1.5),
               ),
               const SizedBox(height: 24),
@@ -83,18 +98,20 @@ class HomeScreen extends StatelessWidget {
                 icon: const Icon(Icons.add),
                 label: const Text('새 경로 탐색'),
               ),
-              const SizedBox(height: 26),
-              Text('최근 경로', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 10),
-              _recentRouteCard(),
-              if (onDesktopEditRecentRoute != null) ...[
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  key: const ValueKey('desktop-edit-recent-route'),
-                  onPressed: onDesktopEditRecentRoute,
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('최근 경로 수정'),
+              if (controller.hasRecentRoute) ...[
+                const SizedBox(height: 26),
+                Text('최근 경로', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 10),
+                _recentRouteCard(),
+              ],
+              if (controller.favorites.isNotEmpty) ...[
+                const SizedBox(height: 26),
+                Text(
+                  '즐겨찾는 경로',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
+                const SizedBox(height: 10),
+                ..._favoriteCards(),
               ],
               const SizedBox(height: 26),
               Text(
@@ -103,92 +120,68 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               for (final place in samplePlaces.take(3))
-                Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Material(
                     color: const Color(0xFFF7F7F9),
                     borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.place_outlined,
-                        size: 19,
-                        color: AppColors.brand,
-                      ),
-                      const SizedBox(width: 9),
-                      Expanded(
-                        child: Text(
-                          place.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                    child: InkWell(
+                      key: ValueKey('sample-place-${place.name}'),
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => _useSamplePlace(context, place),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.place_outlined,
+                              size: 19,
+                              color: AppColors.brand,
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Text(
+                                place.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
             ],
           ),
         ),
         const Divider(height: 1),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _desktopMenuButton(
-                    label: '홈',
-                    icon: Icons.home,
-                    selected: true,
-                    onPressed: () {},
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _desktopMenuButton(
-                    key: const ValueKey('desktop-info-menu'),
-                    label: '서비스 정보',
-                    icon: Icons.info_outline,
-                    selected: false,
-                    onPressed: () => controller.show(AppScreen.info),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        DesktopTabBar(controller: controller, selected: AppScreen.home),
       ],
     ),
   );
 
   Widget _brandHeader(BuildContext context) => Row(
     children: [
-      const DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.brand,
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(9),
-          child: Icon(Icons.electric_scooter, color: Colors.white),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SvgPicture.asset(
+          'assets/main_icon.svg',
+          width: 32,
+          height: 32,
         ),
       ),
       const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          'PM 세이프라인',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-      ),
+      SvgPicture.asset('assets/title_img.svg', height: 40),
     ],
   );
 
   Widget _recentRouteCard() => InkWell(
+    key: const ValueKey('recent-route-card'),
     borderRadius: BorderRadius.circular(16),
     onTap: () {
       controller.useRecentRoute();
@@ -206,8 +199,8 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${controller.recentRouteStart?.name ?? '충남대학교'} → '
-            '${controller.recentRouteDestination?.name ?? '대전시청'}',
+            '${controller.recentRouteStart?.name} → '
+            '${controller.recentRouteDestination?.name}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 5),
@@ -223,40 +216,62 @@ class HomeScreen extends StatelessWidget {
     ),
   );
 
-  Widget _desktopMenuButton({
-    Key? key,
-    required String label,
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onPressed,
-  }) => Material(
-    key: key,
-    color: selected ? const Color(0xFFFDEDEC) : Colors.transparent,
-    borderRadius: BorderRadius.circular(12),
-    child: InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 11),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 19,
-              color: selected ? AppColors.brand : AppColors.secondary,
+  List<Widget> _favoriteCards() => [
+    for (final favorite in controller.favorites)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: InkWell(
+          key: ValueKey('favorite-route-${favorite.id}'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            controller.useFavorite(favorite);
+            controller.analyze();
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(16),
             ),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected ? AppColors.brand : AppColors.secondary,
-                fontWeight: FontWeight.w700,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    favorite.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  key: ValueKey('remove-favorite-${favorite.id}'),
+                  tooltip: '즐겨찾기 해제',
+                  onPressed: () => controller.removeFavorite(favorite.id),
+                  icon: const Icon(Icons.star, color: AppColors.brand),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
-    ),
-  );
+  ];
+
+  Future<void> _useSamplePlace(BuildContext context, Place destination) async {
+    const locationService = CurrentLocationService();
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final position = await locationService.getCurrentLocation();
+      final start = Place('현재 위치', '현재 위치', position);
+      controller.setStart(start);
+      controller.setDestination(destination);
+      await controller.analyze();
+    } on CurrentLocationException catch (error) {
+      messenger?.showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
 }

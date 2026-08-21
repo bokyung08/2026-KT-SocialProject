@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../app_controller.dart';
 import '../data/sample_places.dart';
@@ -29,6 +30,8 @@ class _DesktopAppShellState extends State<DesktopAppShell> {
   Place? _searchInitialDestination;
   Place? _previewStart;
   Place? _previewDestination;
+  LatLng? _mapTapPoint;
+  int _mapTapSession = 0;
 
   @override
   void initState() {
@@ -77,18 +80,6 @@ class _DesktopAppShellState extends State<DesktopAppShell> {
     destination: null,
   );
 
-  void _openRecentRoute() => _openSearch(
-    target: RouteSearchTarget.destination,
-    start:
-        widget.controller.recentRouteStart ??
-        widget.controller.start ??
-        samplePlaces.first,
-    destination:
-        widget.controller.recentRouteDestination ??
-        widget.controller.destination ??
-        samplePlaces[1],
-  );
-
   void _closeSearch() {
     widget.controller.cancelDraftAnalysis();
     setState(() {
@@ -127,13 +118,20 @@ class _DesktopAppShellState extends State<DesktopAppShell> {
     });
   }
 
+  void _handleMapTap(LatLng point) {
+    if (!_searchOpen) return;
+    setState(() {
+      _mapTapPoint = point;
+      _mapTapSession++;
+    });
+  }
+
   Widget _panel() => switch (widget.controller.screen) {
     AppScreen.home || AppScreen.input => HomeScreen(
       key: const ValueKey('desktop-home-content'),
       controller: widget.controller,
       desktopPanel: true,
       onDesktopNewRoute: _openNewRoute,
-      onDesktopEditRecentRoute: _openRecentRoute,
     ),
     AppScreen.loading => LoadingScreen(
       key: const ValueKey('desktop-loading-content'),
@@ -175,7 +173,6 @@ class _DesktopAppShellState extends State<DesktopAppShell> {
       onMapLayoutChanged: _mapController.fitRoute,
       layoutToken: controller.screen,
       overlayOpen: _searchOpen,
-      onDismissOverlay: _closeSearch,
       overlayPanel: DesktopRouteSearchPanel(
         key: ValueKey('desktop-search-session-$_searchSession'),
         initialStart: _searchInitialStart,
@@ -186,6 +183,8 @@ class _DesktopAppShellState extends State<DesktopAppShell> {
         onClose: _closeSearch,
         onDraftChanged: _updatePreview,
         onSubmit: _submitDraft,
+        mapTapPoint: _mapTapPoint,
+        mapTapSession: _mapTapSession,
       ),
       panel: SafeArea(child: _panel()),
       map: RouteMap(
@@ -196,6 +195,7 @@ class _DesktopAppShellState extends State<DesktopAppShell> {
         route: _selectedRoute,
         fitPadding: const EdgeInsets.fromLTRB(52, 76, 76, 58),
         maxRouteZoom: 15.5,
+        onMapTap: _searchOpen ? _handleMapTap : null,
       ),
     );
   }

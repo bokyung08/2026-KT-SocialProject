@@ -26,7 +26,6 @@ class ResponsiveMapShell extends StatefulWidget {
     this.layoutToken,
     this.overlayPanel,
     this.overlayOpen = false,
-    this.onDismissOverlay,
   });
 
   final Widget panel;
@@ -37,7 +36,6 @@ class ResponsiveMapShell extends StatefulWidget {
   final Object? layoutToken;
   final Widget? overlayPanel;
   final bool overlayOpen;
-  final VoidCallback? onDismissOverlay;
 
   @override
   State<ResponsiveMapShell> createState() => _ResponsiveMapShellState();
@@ -60,21 +58,26 @@ class _ResponsiveMapShellState extends State<ResponsiveMapShell> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      if (_lastWidth != null &&
-          (_lastWidth! - constraints.maxWidth).abs() > .5) {
-        _notifyMapAfterFrame();
-      }
-      _lastWidth = constraints.maxWidth;
-      final panelWidth = ResponsiveLayout.panelWidth(constraints.maxWidth);
-      final overlayWidth = math.min(
-        panelWidth,
-        math.max(0.0, constraints.maxWidth - panelWidth),
-      );
-      return Stack(
-        clipBehavior: Clip.none,
-        children: [
+  Widget build(BuildContext context) {
+    // LayoutBuilder는 쓰지 않는다: 그 builder 콜백은 레이아웃 단계에서만
+    // 재실행되는데, 오버레이 패널의 Positioned 지오메트리(left/width 등)가
+    // 안 바뀐 채로 그 안의 자식 위젯 prop만 바뀌면(예: 지도 탭 좌표) 프레임워크가
+    // "다시 레이아웃할 필요 없음"으로 보고 콜백을 건너뛰어, 오버레이 패널이
+    // 새 상태를 못 받는 문제가 있었다. MediaQuery는 일반 빌드 경로를 타므로
+    // setState가 있을 때마다 항상 다시 계산된다.
+    final size = MediaQuery.sizeOf(context);
+    if (_lastWidth != null && (_lastWidth! - size.width).abs() > .5) {
+      _notifyMapAfterFrame();
+    }
+    _lastWidth = size.width;
+    final panelWidth = ResponsiveLayout.panelWidth(size.width);
+    final overlayWidth = math.min(
+      panelWidth,
+      math.max(0.0, size.width - panelWidth),
+    );
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
           AnimatedPositioned(
             key: const ValueKey('responsive-shell-map'),
             duration: _duration,
@@ -92,16 +95,13 @@ class _ResponsiveMapShellState extends State<ResponsiveMapShell> {
             right: 0,
             bottom: 0,
             child: IgnorePointer(
-              ignoring: !widget.overlayOpen,
               child: AnimatedOpacity(
                 duration: _duration,
                 curve: Curves.easeOut,
                 opacity: widget.overlayOpen ? 1 : 0,
-                child: GestureDetector(
-                  key: const ValueKey('desktop-search-map-scrim'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: widget.onDismissOverlay,
-                  child: const ColoredBox(color: Color(0x1A000000)),
+                child: const ColoredBox(
+                  key: ValueKey('desktop-search-map-scrim'),
+                  color: Color(0x1A000000),
                 ),
               ),
             ),
@@ -148,9 +148,7 @@ class _ResponsiveMapShellState extends State<ResponsiveMapShell> {
             duration: _duration,
             curve: Curves.easeOutCubic,
             left: widget.panelOpen ? panelWidth - 1 : 0,
-            top: (constraints.maxHeight / 2 - 30)
-                .clamp(16.0, double.infinity)
-                .toDouble(),
+            top: (size.height / 2 - 30).clamp(16.0, double.infinity).toDouble(),
             width: 28,
             height: 60,
             child: AnimatedOpacity(
@@ -167,8 +165,7 @@ class _ResponsiveMapShellState extends State<ResponsiveMapShell> {
           ),
         ],
       );
-    },
-  );
+  }
 }
 
 class _PanelEdgeTab extends StatelessWidget {

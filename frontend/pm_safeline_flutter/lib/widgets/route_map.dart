@@ -65,6 +65,7 @@ class RouteMap extends StatefulWidget {
     this.rentalStations = const [],
     this.showRentalStations = false,
     this.onRentalStationTap,
+    this.onMapTap,
     this.fitPadding = const EdgeInsets.all(42),
     this.maxRouteZoom = 16,
   });
@@ -79,6 +80,7 @@ class RouteMap extends StatefulWidget {
   final List<RentalStation> rentalStations;
   final bool showRentalStations;
   final ValueChanged<RentalStation>? onRentalStationTap;
+  final ValueChanged<LatLng>? onMapTap;
   final EdgeInsets fitPadding;
   final double maxRouteZoom;
 
@@ -109,7 +111,22 @@ class _RouteMapState extends State<RouteMap> {
   void initState() {
     super.initState();
     widget.controller?._attach(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // flutter_map은 자기 크기를 내부 LayoutBuilder로 측정하는데, 그
+      // 콜백은 FlutterMap 위젯 자체가 다시 빌드될 때만 재실행된다. Flutter
+      // Web 부팅 초반엔 네이티브 해상도가 아직 확정되지 않아 이 첫 측정이
+      // 0에 가까운 잘못된 크기로 고정될 수 있는데(flutter_map 자체 문서화된
+      // 케이스), _fit()은 컨트롤러만 조작할 뿐 위젯을 리빌드시키지
+      // 않으므로 그 잘못된 크기가 그대로 굳어버린다. 진짜로 한 번 더
+      // 리빌드를 발생시켜 flutter_map이 최종 확정된 제약으로 다시
+      // 측정하게 만든 뒤에 fit한다.
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _fit();
+      });
+    });
   }
 
   @override
@@ -197,11 +214,23 @@ class _RouteMapState extends State<RouteMap> {
               ? InteractiveFlag.all
               : InteractiveFlag.none,
         ),
+        onTap: widget.onMapTap == null
+            ? null
+            : (_, point) => widget.onMapTap!(point),
       ),
       children: [
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.kt.pm_safeline_flutter',
+          // 기본 NetworkTileProvider는 "더는 필요 없어진(pruned)" 타일의
+          // 진행 중인 요청을 능동적으로 취소한다(abortObsoleteRequests).
+          // 첫 마운트 직후 fitCamera로 초기 줌(13.2) → 목적지에 맞춘 줌으로
+          // 즉시 바뀌면서, 첫 요청분이 "이미 필요 없는 줌"으로 판정돼 전부
+          // net::ERR_ABORTED로 취소되고 다시 요청되지 않는 게 실제 원인이었다.
+          // 이 앱은 fitCamera가 마운트 직후 항상 한 번 더 실행되는 구조라
+          // 그 취소가 무해하지 않고 첫 타일이 영영 안 뜨는 문제로 이어지므로
+          // 꺼둔다.
+          tileProvider: NetworkTileProvider(abortObsoleteRequests: false),
         ),
         if (hasAccessSegment)
           PolylineLayer(

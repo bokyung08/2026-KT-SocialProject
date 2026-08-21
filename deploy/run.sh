@@ -8,6 +8,9 @@
 # 로그아웃해도 계속 돌리려면 tmux/screen 안에서 실행하거나:
 #   nohup bash deploy/run.sh > run.log 2>&1 &
 #
+# 매 주기 `git pull`만 시도한다. 실패하면(충돌, 네트워크 등) 그냥 무시하고
+# 다음 주기에 재시도한다 — 어떤 경우에도 이미 떠 있는 서버는 건드리지 않는다.
+#
 # 환경변수:
 #   PM_BRANCH        추적 브랜치        (기본 main)
 #   PM_POLL_SECONDS  변경 확인 주기(초) (기본 60)
@@ -55,14 +58,17 @@ while true; do
     echo "[run] 서버가 종료되어 있음 -> 재시작"; start_server
   fi
 
-  git fetch --quiet origin "$BRANCH" || { echo "[run] git fetch 실패, 다음 주기 재시도"; continue; }
-  LOCAL="$(git rev-parse HEAD)"
-  REMOTE="$(git rev-parse "origin/$BRANCH")"
-  [ "$LOCAL" = "$REMOTE" ] && continue
+  BEFORE="$(git rev-parse HEAD)"
+  if ! git pull --quiet; then
+    echo "[run] git pull 실패, 다음 주기 재시도"; continue
+  fi
+  AFTER="$(git rev-parse HEAD)"
+  [ "$BEFORE" = "$AFTER" ] && continue
 
-  echo "[run] 새 커밋 감지 ${LOCAL:0:7} -> ${REMOTE:0:7} : 새로고침"
-  git reset --hard "origin/$BRANCH"
-  stop_server
-  build
-  start_server
+  echo "[run] 새 커밋 감지 -> 새로고침"
+  if stop_server && build && start_server; then
+    :
+  else
+    echo "[run] 새로고침 실패, 다음 주기 재시도"
+  fi
 done

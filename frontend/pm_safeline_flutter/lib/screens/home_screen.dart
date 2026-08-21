@@ -27,8 +27,14 @@ class HomeScreen extends StatelessWidget {
       desktopPanel ? _buildDesktopPanel(context) : _buildMobile(context);
 
   Widget _buildMobile(BuildContext context) => Scaffold(
+    extendBody: true,
     body: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 12),
+      padding: const EdgeInsets.fromLTRB(
+        20,
+        22,
+        20,
+        SafeLineBottomNav.reservedHeight,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

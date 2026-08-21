@@ -8,7 +8,7 @@ import 'package:pm_safeline_flutter/screens/route_result_screen.dart';
 import 'package:pm_safeline_flutter/theme/app_theme.dart';
 
 void main() {
-  testWidgets('모바일 대시보드 드래그 핸들은 추천 배지 줄보다 위에 놓인다', (tester) async {
+  testWidgets('드래그 핸들 바는 타이틀 글자 윗선에 맞고 세로 공간을 차지하지 않는다', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -24,18 +24,26 @@ void main() {
     );
     await tester.pump();
 
-    final handle = find.byKey(const ValueKey('mobile-dashboard-handle'));
-    final badge = find.text('후보 중 추천');
-    expect(handle, findsOneWidget);
-    expect(badge, findsOneWidget);
+    final bar = find.byKey(const ValueKey('mobile-dashboard-handle-bar'));
+    final title = find.text('추천 경로');
+    expect(bar, findsOneWidget);
+    expect(title, findsOneWidget);
 
-    final handleRect = tester.getRect(handle);
-    final badgeRect = tester.getRect(badge);
+    final barRect = tester.getRect(bar);
+    final titleRect = tester.getRect(title);
 
-    // 핸들이 배지/타이틀 줄과 겹치지 않고 완전히 그 위에 있어야 한다.
-    expect(handleRect.bottom, lessThanOrEqualTo(badgeRect.top));
+    // 바 윗선이 타이틀 글자 박스 윗선과 나란해야 한다.
+    expect(barRect.top, closeTo(titleRect.top, 1));
     // 카드는 좌우 12씩 대칭 여백이라 카드 중앙 == 화면 중앙이다.
-    expect(handleRect.center.dx, closeTo(390 / 2, 0.5));
+    expect(barRect.center.dx, closeTo(390 / 2, 0.5));
+
+    // 별도 줄이 아니라 겹쳐 있어야 한다(= 세로 공간을 차지하지 않는다).
+    // 자기 줄을 가지면 바가 타이틀 박스 위로 완전히 벗어난다.
+    expect(barRect.bottom, greaterThan(titleRect.top));
+    // 핸들이 Positioned 라 타이틀 줄 높이를 키우지 않는다.
+    final stack = find.ancestor(of: title, matching: find.byType(Stack)).first;
+    final row = find.descendant(of: stack, matching: find.byType(Row)).first;
+    expect(tester.getRect(stack).height, tester.getRect(row).height);
   });
 
   // pill 안의 즐겨찾기 IconButton 기본 최소 크기(40) 때문에 상단 바가 62px 로

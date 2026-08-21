@@ -24,6 +24,7 @@ class _SafeLineAppState extends State<SafeLineApp> {
   void initState() {
     super.initState();
     controller = AppController()..addListener(_changed);
+    controller.loadPersisted();
   }
 
   void _changed() => setState(() {});
@@ -38,7 +39,7 @@ class _SafeLineAppState extends State<SafeLineApp> {
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
-    title: 'PM 세이프라인',
+    title: 'GILIT (길잇)',
     theme: buildAppTheme(),
     home: LayoutBuilder(
       builder: (context, constraints) {

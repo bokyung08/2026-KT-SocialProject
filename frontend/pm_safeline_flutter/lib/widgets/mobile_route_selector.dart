@@ -147,7 +147,7 @@ class _MobileRouteSelectorState extends State<MobileRouteSelector> {
                 ],
                 Flexible(
                   child: Text(
-                    index == 0 ? '추천 경로' : '대안 ${index + 1}',
+                    index == 0 ? '추천 경로' : '대안 $index',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,

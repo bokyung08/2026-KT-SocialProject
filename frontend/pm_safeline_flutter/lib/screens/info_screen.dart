@@ -4,6 +4,7 @@ import '../app_controller.dart';
 import '../config/api_config.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
+import '../widgets/desktop_tab_bar.dart';
 
 class InfoScreen extends StatelessWidget {
   const InfoScreen({
@@ -26,26 +27,7 @@ class InfoScreen extends StatelessWidget {
         20,
       ),
       children: [
-        if (desktopPanel)
-          Row(
-            children: [
-              IconButton(
-                key: const ValueKey('desktop-info-back'),
-                onPressed: () => controller.show(AppScreen.home),
-                icon: const Icon(Icons.arrow_back),
-                tooltip: '홈으로',
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  '서비스 정보',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-              ),
-            ],
-          )
-        else
-          Text('서비스 정보', style: Theme.of(context).textTheme.headlineSmall),
+        Text('서비스 정보', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
         const Text(
           'PM 이용자가 자전거도로의 단절과 위험 도로구조를 피하도록 '
@@ -59,22 +41,30 @@ class InfoScreen extends StatelessWidget {
               : 'API · ${ApiConfig.baseUrl}',
           Icons.tune,
         ),
-        _card(
-          '지도 데이터',
-          '© OpenStreetMap contributors\n별도의 지도 API 키가 필요하지 않습니다.',
-          Icons.map_outlined,
-        ),
+        _card('지도 데이터', '© OpenStreetMap contributors', Icons.map_outlined),
         _card(
           'API 데이터 안내',
           ApiConfig.useMock
               ? '위험 지점과 설명은 시연용 Mock 데이터입니다.'
-              : '구간별 위험 위치와 사유는 현재 서버가 제공하지 않아 표시하지 않습니다.',
+              : '안전 점수와 추천 이유는 도로 구조 데이터를 기반으로 제공되며, '
+                    '구간별 상세 위험 정보는 추후 제공될 예정입니다.',
           Icons.info_outline,
         ),
       ],
     );
 
-    if (desktopPanel) return ColoredBox(color: Colors.white, child: content);
+    if (desktopPanel) {
+      return ColoredBox(
+        color: Colors.white,
+        child: Column(
+          children: [
+            Expanded(child: content),
+            const Divider(height: 1),
+            DesktopTabBar(controller: controller, selected: AppScreen.info),
+          ],
+        ),
+      );
+    }
     return Scaffold(
       body: content,
       bottomNavigationBar: SafeLineBottomNav(controller: controller, index: 1),

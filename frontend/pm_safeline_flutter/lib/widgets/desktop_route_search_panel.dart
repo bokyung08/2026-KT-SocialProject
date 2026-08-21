@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../data/sample_places.dart';
 import '../models/place.dart';
@@ -24,6 +26,8 @@ class DesktopRouteSearchPanel extends StatefulWidget {
     required this.onDraftChanged,
     required this.onSubmit,
     this.geocodingService,
+    this.mapTapPoint,
+    this.mapTapSession = 0,
   });
 
   final Place? initialStart;
@@ -35,6 +39,8 @@ class DesktopRouteSearchPanel extends StatefulWidget {
   final void Function(Place? start, Place? destination) onDraftChanged;
   final DraftRouteSubmit onSubmit;
   final GeocodingService? geocodingService;
+  final LatLng? mapTapPoint;
+  final int mapTapSession;
 
   @override
   State<DesktopRouteSearchPanel> createState() =>
@@ -76,6 +82,7 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
   Place? _draftDestination;
   bool _submitting = false;
   String? _submitError;
+  bool _suppressQueryChange = false;
 
   TextEditingController get _activeText =>
       _editingStart ? _startText : _destinationText;
@@ -106,6 +113,61 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
   void didUpdateWidget(covariant DesktopRouteSearchPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.active && widget.active) _requestInitialFocus();
+    if (widget.mapTapSession != oldWidget.mapTapSession &&
+        widget.mapTapPoint != null) {
+      _selectFromMap(widget.mapTapPoint!);
+    }
+  }
+
+  void _selectFromMap(LatLng point) {
+    final wasStart = _editingStart;
+    final fallbackName =
+        '위도 ${point.latitude.toStringAsFixed(5)}, '
+        '경도 ${point.longitude.toStringAsFixed(5)}';
+    final place = Place('지도에서 선택한 위치', fallbackName, point);
+    final field = wasStart ? _startSearch : _destinationSearch;
+    field.reset();
+    // TextEditingController.text를 바꾸면 TextField의 onChanged가 함께 호출되어
+    // _onQueryChanged가 방금 지정한 draft를 도로 지워버릴 수 있다. 프로그램적으로
+    // 텍스트를 바꾸는 동안에는 그 콜백을 무시한다.
+    _suppressQueryChange = true;
+    if (wasStart) {
+      _draftStart = place;
+      _startText.text = place.name;
+    } else {
+      _draftDestination = place;
+      _destinationText.text = place.name;
+    }
+    _suppressQueryChange = false;
+    _notifyDraft();
+
+    if (_draftStart == null) {
+      _activateField(true);
+    } else if (_draftDestination == null) {
+      _activateField(false);
+    } else {
+      setState(() => _submitError = null);
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+
+    _geocoding.reverseGeocode(point.latitude, point.longitude).then((result) {
+      if (!mounted || result == null) return;
+      final resolved = Place(result.name, result.address, point);
+      final stillCurrent = wasStart
+          ? _draftStart?.position == point
+          : _draftDestination?.position == point;
+      if (!stillCurrent) return;
+      _suppressQueryChange = true;
+      if (wasStart) {
+        _draftStart = resolved;
+        _startText.text = resolved.name;
+      } else {
+        _draftDestination = resolved;
+        _destinationText.text = resolved.name;
+      }
+      _suppressQueryChange = false;
+      _notifyDraft();
+    });
   }
 
   void _requestInitialFocus() {
@@ -134,6 +196,7 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
   }
 
   void _onQueryChanged({required bool start, required String value}) {
+    if (_suppressQueryChange) return;
     final field = start ? _startSearch : _destinationSearch;
     final selected = start ? _draftStart : _draftDestination;
     field.debounce?.cancel();
@@ -215,6 +278,7 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
     final place = result.toPlace();
     final field = _editingStart ? _startSearch : _destinationSearch;
     field.reset();
+    _suppressQueryChange = true;
     if (_editingStart) {
       _draftStart = place;
       _startText.text = result.displayTitle;
@@ -222,6 +286,7 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
       _draftDestination = place;
       _destinationText.text = result.displayTitle;
     }
+    _suppressQueryChange = false;
     _notifyDraft();
 
     if (_draftStart == null) {
@@ -238,7 +303,9 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
     final field = start ? _startSearch : _destinationSearch;
     final text = start ? _startText : _destinationText;
     field.reset();
+    _suppressQueryChange = true;
     text.clear();
+    _suppressQueryChange = false;
     if (start) {
       _draftStart = null;
     } else {
@@ -250,9 +317,11 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
   }
 
   void _swap() {
+    _suppressQueryChange = true;
     final oldText = _startText.text;
     _startText.text = _destinationText.text;
     _destinationText.text = oldText;
+    _suppressQueryChange = false;
     final oldPlace = _draftStart;
     _draftStart = _draftDestination;
     _draftDestination = oldPlace;
@@ -280,6 +349,13 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
     });
     final error = await widget.onSubmit(start, destination);
     if (!mounted) return;
+    if (kDebugMode) {
+      debugPrint(
+        error == null
+            ? '[DesktopRouteSearchPanel] submit 성공'
+            : '[DesktopRouteSearchPanel] submit 실패: $error',
+      );
+    }
     setState(() {
       _submitting = false;
       _submitError = error;
@@ -352,7 +428,7 @@ class _DesktopRouteSearchPanelState extends State<DesktopRouteSearchPanel> {
                     ? '“$activeQuery” 검색 결과'
                     : activeQuery.isEmpty
                     ? '최근 검색 · 추천 장소'
-                    : '2글자 이상 입력하면 자동으로 검색해요',
+                    : '',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,

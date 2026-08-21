@@ -49,11 +49,15 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
   LatLng? _recommendationStartSource;
   bool _showRentalStations = false;
   bool _mapFocusMode = false;
+  double? _dashboardDragHeight;
+  bool _legendExpanded = false;
   bool _desktopSearchOpen = false;
   int _desktopSearchSession = 0;
   RouteSearchTarget _desktopSearchTarget = RouteSearchTarget.destination;
   Place? _previewStart;
   Place? _previewDestination;
+  LatLng? _mapTapPoint;
+  int _mapTapSession = 0;
   bool _loadingStations = false;
   String? _stationError;
   final _mapAreaKey = GlobalKey();
@@ -228,12 +232,10 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
   void _fitEntireRoute() => _routeMapController.fitRoute();
 
   void _toggleMapFocusMode() {
+    final isWide = ResponsiveLayout.isWide(MediaQuery.sizeOf(context).width);
     setState(() {
       _mapFocusMode = !_mapFocusMode;
-      if (_mapFocusMode &&
-          ResponsiveLayout.isWide(MediaQuery.sizeOf(context).width)) {
-        widget.controller.setDesktopPanelOpen(false);
-      }
+      if (isWide) widget.controller.setDesktopPanelOpen(!_mapFocusMode);
     });
     _scheduleMapRefit();
   }
@@ -271,6 +273,14 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
     setState(() {
       _previewStart = start;
       _previewDestination = destination;
+    });
+  }
+
+  void _handleDesktopMapTap(LatLng point) {
+    if (!_desktopSearchOpen) return;
+    setState(() {
+      _mapTapPoint = point;
+      _mapTapSession++;
     });
   }
 
@@ -469,89 +479,95 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
       return const Scaffold(body: Center(child: Text('표시할 경로가 없습니다.')));
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final route = widget.controller.routes[widget.controller.selectedRoute];
-        _refreshRecommendedStations(route);
-        final isWide = ResponsiveLayout.isWide(constraints.maxWidth);
-        final panelVisible = isWide && widget.controller.desktopPanelOpen;
-        _observeResponsiveLayout(
-          width: constraints.maxWidth,
-          isWide: isWide,
-          panelVisible: panelVisible,
-        );
-        if (!isWide) _scheduleDashboardMeasurement();
+    // LayoutBuilder는 쓰지 않는다: 그 builder 콜백은 레이아웃 단계에서만
+    // 재실행되는데, 화면 지오메트리(가로/세로 크기)가 안 바뀐 채로 하위
+    // 위젯의 prop만 바뀌면(예: 지도 탭 좌표) 프레임워크가 "다시 레이아웃할
+    // 필요 없음"으로 보고 콜백을 건너뛰어, 그 안에서 만들어지는 검색
+    // 오버레이가 새 상태를 못 받는 문제가 있었다. MediaQuery는 일반 빌드
+    // 경로를 타므로 setState가 있을 때마다 항상 다시 계산된다.
+    {
+      final size = MediaQuery.sizeOf(context);
+      final route = widget.controller.routes[widget.controller.selectedRoute];
+      _refreshRecommendedStations(route);
+      final isWide = ResponsiveLayout.isWide(size.width);
+      final panelVisible = isWide && widget.controller.desktopPanelOpen;
+      _observeResponsiveLayout(
+        width: size.width,
+        isWide: isWide,
+        panelVisible: panelVisible,
+      );
+      if (!isWide) _scheduleDashboardMeasurement();
 
-        final safePadding = MediaQuery.paddingOf(context);
-        final routeFitPadding = _routeFitPadding(
-          viewportHeight: constraints.maxHeight,
-          safePadding: safePadding,
-          isWide: isWide,
-          panelVisible: panelVisible,
-        );
-        final accessOrigin = widget.controller.rentalAccessOrigin;
-        final rentalStart = widget.controller.rentalStationStart;
-        final accessDistance = accessOrigin == null || rentalStart == null
-            ? null
-            : const Distance().as(
-                LengthUnit.Meter,
-                accessOrigin.position,
-                rentalStart.position,
-              );
+      final safePadding = MediaQuery.paddingOf(context);
+      final routeFitPadding = _routeFitPadding(
+        viewportHeight: size.height,
+        safePadding: safePadding,
+        isWide: isWide,
+        panelVisible: panelVisible,
+      );
+      final accessOrigin = widget.controller.rentalAccessOrigin;
+      final rentalStart = widget.controller.rentalStationStart;
+      final accessDistance = accessOrigin == null || rentalStart == null
+          ? null
+          : const Distance().as(
+              LengthUnit.Meter,
+              accessOrigin.position,
+              rentalStart.position,
+            );
 
-        if (!isWide) {
-          return Scaffold(
-            body: _buildMapArea(
-              route: route,
-              fitPadding: routeFitPadding,
-              safePadding: safePadding,
-              isWide: false,
-              showCollapsedBackButton: false,
-              accessOrigin: accessOrigin,
-              rentalStart: rentalStart,
-              accessDistance: accessDistance,
-              includeMobileDashboard: true,
-            ),
-          );
-        }
-
+      if (!isWide) {
         return Scaffold(
-          body: ResponsiveMapShell(
-            panelOpen: panelVisible,
-            onTogglePanel: _toggleDesktopPanel,
-            onMapLayoutChanged: _fitEntireRoute,
-            layoutToken: widget.controller.selectedRoute,
-            panel: SafeArea(child: _buildDesktopPanel(route)),
-            overlayOpen: _desktopSearchOpen,
-            onDismissOverlay: _closeDesktopSearch,
-            overlayPanel: DesktopRouteSearchPanel(
-              key: ValueKey(
-                'desktop-result-search-session-$_desktopSearchSession',
-              ),
-              initialStart: widget.controller.start,
-              initialDestination: widget.controller.destination,
-              initialTarget: _desktopSearchTarget,
-              active: _desktopSearchOpen,
-              recentPlaces: widget.controller.recentPlaces,
-              onClose: _closeDesktopSearch,
-              onDraftChanged: _updateDesktopPreview,
-              onSubmit: _submitDesktopDraft,
-            ),
-            map: _buildMapArea(
-              route: route,
-              fitPadding: routeFitPadding,
-              safePadding: safePadding,
-              isWide: true,
-              showCollapsedBackButton: !panelVisible,
-              accessOrigin: accessOrigin,
-              rentalStart: rentalStart,
-              accessDistance: accessDistance,
-              includeMobileDashboard: false,
-            ),
+          body: _buildMapArea(
+            route: route,
+            fitPadding: routeFitPadding,
+            safePadding: safePadding,
+            isWide: false,
+            showCollapsedBackButton: false,
+            accessOrigin: accessOrigin,
+            rentalStart: rentalStart,
+            accessDistance: accessDistance,
+            includeMobileDashboard: true,
           ),
         );
-      },
-    );
+      }
+
+      return Scaffold(
+        body: ResponsiveMapShell(
+          panelOpen: panelVisible,
+          onTogglePanel: _toggleDesktopPanel,
+          onMapLayoutChanged: _fitEntireRoute,
+          layoutToken: widget.controller.selectedRoute,
+          panel: SafeArea(child: _buildDesktopPanel(route)),
+          overlayOpen: _desktopSearchOpen,
+          overlayPanel: DesktopRouteSearchPanel(
+            key: ValueKey(
+              'desktop-result-search-session-$_desktopSearchSession',
+            ),
+            initialStart: widget.controller.start,
+            initialDestination: widget.controller.destination,
+            initialTarget: _desktopSearchTarget,
+            active: _desktopSearchOpen,
+            recentPlaces: widget.controller.recentPlaces,
+            onClose: _closeDesktopSearch,
+            onDraftChanged: _updateDesktopPreview,
+            onSubmit: _submitDesktopDraft,
+            mapTapPoint: _mapTapPoint,
+            mapTapSession: _mapTapSession,
+          ),
+          map: _buildMapArea(
+            route: route,
+            fitPadding: routeFitPadding,
+            safePadding: safePadding,
+            isWide: true,
+            showCollapsedBackButton: !panelVisible,
+            accessOrigin: accessOrigin,
+            rentalStart: rentalStart,
+            accessDistance: accessDistance,
+            includeMobileDashboard: false,
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildMapArea({
@@ -571,6 +587,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
       children: [
         Positioned.fill(
           child: RouteMap(
+            key: const ValueKey('result-persistent-map'),
             controller: _routeMapController,
             start:
                 (_desktopSearchOpen ? _previewStart?.position : null) ??
@@ -586,6 +603,9 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
             onRentalStationTap: _showStationDetails,
             fitPadding: fitPadding,
             maxRouteZoom: 15.5,
+            onMapTap: isWide && _desktopSearchOpen
+                ? _handleDesktopMapTap
+                : null,
           ),
         ),
         if (!isWide)
@@ -601,7 +621,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
         else if (showCollapsedBackButton)
           Positioned(
             top: 12 + topBase,
-            left: 40,
+            left: 12,
             child: IconButton.filled(
               key: const ValueKey('route-back-button'),
               onPressed: () => widget.controller.show(AppScreen.home),
@@ -674,7 +694,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
         if (accessDistance != null)
           Positioned(
             top: (isWide ? 68 : 120) + topBase,
-            left: isWide && showCollapsedBackButton ? 40 : 12,
+            left: 12,
             child: Material(
               key: const ValueKey('rental-access-distance'),
               color: Colors.white,
@@ -743,12 +763,13 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  const SizedBox(width: 6),
                   const Icon(
                     Icons.edit_outlined,
                     size: 18,
                     color: AppColors.muted,
                   ),
+                  const SizedBox(width: 10),
+                  _favoriteButton(color: AppColors.muted, size: 20),
                 ],
               ),
             ),
@@ -757,6 +778,27 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
       ),
     ],
   );
+
+  Widget _favoriteButton({Color color = Colors.black, double size = 24}) {
+    final start = widget.controller.start;
+    final destination = widget.controller.destination;
+    if (start == null || destination == null) return const SizedBox.shrink();
+    return IconButton(
+      key: const ValueKey('toggle-favorite-route'),
+      tooltip: '즐겨찾기',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      visualDensity: VisualDensity.compact,
+      onPressed: () => widget.controller.toggleFavorite(start, destination),
+      icon: Icon(
+        widget.controller.isFavorite(start, destination)
+            ? Icons.star
+            : Icons.star_border,
+        color: color,
+        size: size,
+      ),
+    );
+  }
 
   Widget _buildDesktopPanel(RouteResult route) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -782,6 +824,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
                 ),
               ),
             ),
+            _favoriteButton(),
           ],
         ),
       ),
@@ -792,94 +835,106 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-            child: Row(
-              children: [
-                const Column(
-                  children: [
-                    Icon(Icons.circle_outlined, size: 17, color: AppColors.ink),
-                    SizedBox(height: 5),
-                    SizedBox(
-                      height: 18,
-                      child: VerticalDivider(width: 1, color: AppColors.muted),
-                    ),
-                    SizedBox(height: 5),
-                    Icon(Icons.location_on, size: 19, color: AppColors.brand),
-                  ],
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Column(
                     children: [
-                      InkWell(
-                        key: const ValueKey('desktop-edit-start'),
-                        onTap: () =>
-                            _openDesktopSearch(RouteSearchTarget.start),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 4,
-                          ),
-                          child: Text(
-                            widget.controller.start!.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.circle_outlined,
+                            size: 17,
+                            color: AppColors.ink,
                           ),
                         ),
                       ),
-                      const Divider(height: 10),
-                      InkWell(
-                        key: const ValueKey('desktop-edit-destination'),
-                        onTap: () =>
-                            _openDesktopSearch(RouteSearchTarget.destination),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 4,
-                          ),
-                          child: Text(
-                            widget.controller.destination!.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
+                      Container(width: 1, height: 10, color: AppColors.muted),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.location_on,
+                            size: 19,
+                            color: AppColors.brand,
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                IconButton(
-                  key: const ValueKey('desktop-route-search'),
-                  onPressed: () =>
-                      _openDesktopSearch(RouteSearchTarget.destination),
-                  tooltip: '출발지와 도착지 수정',
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    size: 19,
-                    color: AppColors.muted,
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        InkWell(
+                          key: const ValueKey('desktop-edit-start'),
+                          onTap: () =>
+                              _openDesktopSearch(RouteSearchTarget.start),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              widget.controller.start!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 10),
+                        InkWell(
+                          key: const ValueKey('desktop-edit-destination'),
+                          onTap: () => _openDesktopSearch(
+                            RouteSearchTarget.destination,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              widget.controller.destination!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  IconButton(
+                    key: const ValueKey('desktop-route-search'),
+                    onPressed: () =>
+                        _openDesktopSearch(RouteSearchTarget.destination),
+                    tooltip: '출발지와 도착지 수정',
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      size: 19,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
       const Divider(height: 1),
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
-          child: _buildRouteDetails(route, desktop: true),
-        ),
-      ),
+      Expanded(child: _buildRouteDetails(route, desktop: true)),
     ],
   );
 
@@ -888,60 +943,129 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
         left: 12,
         right: 12,
         bottom: 12 + safePadding.bottom,
-        child: Container(
+        child: AnimatedContainer(
           key: _dashboardKey,
-          constraints: BoxConstraints(maxHeight: _mapFocusMode ? 72 : 390),
+          duration: _dashboardDragHeight != null
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          constraints: BoxConstraints(
+            maxHeight: _dashboardDragHeight ?? (_mapFocusMode ? 88 : 390),
+          ),
           padding: EdgeInsets.all(_mapFocusMode ? 12 : 16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(22),
             boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 18)],
           ),
-          child: _mapFocusMode
-              ? InkWell(
-                  key: const ValueKey('map-focus-summary'),
-                  onTap: _toggleMapFocusMode,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.route_outlined, color: AppColors.safe),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: _mapFocusMode
+                    ? InkWell(
+                        key: const ValueKey('map-focus-summary'),
+                        onTap: _toggleMapFocusMode,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Row(
                           children: [
-                            Text(
-                              route.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                            const Icon(
+                              Icons.route_outlined,
+                              color: AppColors.safe,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    route.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${formatDistance(route.distanceMeters)} · '
+                                    '${formatDuration(route.durationMillis)}',
+                                    style: const TextStyle(
+                                      color: AppColors.muted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              '${formatDistance(route.distanceMeters)} · '
-                              '${formatDuration(route.durationMillis)}',
-                              style: const TextStyle(
-                                color: AppColors.muted,
-                                fontSize: 12,
-                              ),
+                            const Icon(
+                              Icons.keyboard_arrow_up_rounded,
+                              color: AppColors.muted,
                             ),
                           ],
                         ),
-                      ),
-                      const Icon(
-                        Icons.keyboard_arrow_up_rounded,
-                        color: AppColors.muted,
-                      ),
-                    ],
-                  ),
-                )
-              : SingleChildScrollView(
-                  child: _buildRouteDetails(route, desktop: false),
-                ),
+                      )
+                    : _buildRouteDetails(route, desktop: false),
+              ),
+            ],
+          ),
         ),
       );
+
+  static const _dashboardCollapsedHeight = 88.0;
+  static const _dashboardExpandedHeight = 390.0;
+
+  Widget _dashboardDragHandle() => GestureDetector(
+    key: const ValueKey('mobile-dashboard-handle'),
+    behavior: HitTestBehavior.opaque,
+    onVerticalDragStart: (_) {
+      setState(() {
+        _dashboardDragHeight = _mapFocusMode
+            ? _dashboardCollapsedHeight
+            : _dashboardExpandedHeight;
+      });
+    },
+    onVerticalDragUpdate: (details) {
+      setState(() {
+        _dashboardDragHeight = (_dashboardDragHeight! - details.delta.dy)
+            .clamp(_dashboardCollapsedHeight, _dashboardExpandedHeight);
+      });
+    },
+    onVerticalDragEnd: (details) {
+      final velocity = details.primaryVelocity ?? 0;
+      final currentHeight =
+          _dashboardDragHeight ??
+          (_mapFocusMode ? _dashboardCollapsedHeight : _dashboardExpandedHeight);
+      final collapse = velocity.abs() > 200
+          ? velocity > 0
+          : currentHeight <
+                (_dashboardCollapsedHeight + _dashboardExpandedHeight) / 2;
+      setState(() {
+        _mapFocusMode = collapse;
+        _dashboardDragHeight = null;
+      });
+      _scheduleMapRefit();
+    },
+    onVerticalDragCancel: () {
+      setState(() => _dashboardDragHeight = null);
+    },
+    child: const SizedBox(
+      width: 56,
+      height: 32,
+      child: Center(
+        child: SizedBox(
+          width: 36,
+          height: 4,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.all(Radius.circular(999)),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 
   Widget _buildRouteDetails(RouteResult route, {required bool desktop}) {
     final reason = RouteRecommendationReasonBuilder.build(
@@ -949,42 +1073,114 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
       candidates: widget.controller.routes,
       isRecommended: widget.controller.selectedRoute == 0,
     );
+    final button = FilledButton(
+      key: const ValueKey('search-again-button'),
+      onPressed: desktop
+          ? () => _openDesktopSearch(RouteSearchTarget.destination)
+          : () => widget.controller.editRoute(),
+      child: const Text('다시 검색하기'),
+    );
+
+    if (!desktop) {
+      // 모바일은 고정 높이 컨테이너 안에서 버튼이 바닥에 눌리는 게 아니라,
+      // 내용 길이만큼만 차지하고 버튼이 바로 뒤에 붙어야 한다(경로마다
+      // 위험 정보 유무 등으로 내용 길이가 달라 억지로 통일할 필요 없음).
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildRouteDetailsContent(route, reason, desktop: false),
+            const SizedBox(height: 14),
+            button,
+          ],
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+            child: _buildRouteDetailsContent(route, reason, desktop: true),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: button,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRouteDetailsContent(
+    RouteResult route,
+    RouteRecommendationReason reason, {
+    required bool desktop,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          alignment: Alignment.center,
           children: [
-            Expanded(
-              child: Text(
-                route.name,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFDEDEC),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                _routeTypeLabel(widget.controller.selectedRoute),
-                style: const TextStyle(
-                  color: AppColors.brand,
-                  fontWeight: FontWeight.w700,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    route.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
-              ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDEDEC),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    _routeTypeLabel(widget.controller.selectedRoute),
+                    style: const TextStyle(
+                      color: AppColors.brand,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
+            // 타이틀/배지 Row 위에 겹쳐서 카드 폭 기준 정확한 정중앙에 온다
+            // (Row 안에 두면 타이틀·배지 사이 남는 공간의 중앙이라 카드
+            // 전체 기준으로는 안 맞았다).
+            if (!desktop) _dashboardDragHandle(),
           ],
         ),
         if (widget.controller.routes.length > 1) ...[
           const SizedBox(height: 12),
-          Text('경로 선택', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
           _buildRouteSelector(desktop),
         ],
         const SizedBox(height: 14),
         _buildMetrics(route),
-
+        if (_legendExpanded) ...[
+          const SizedBox(height: 10),
+          const Center(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 6,
+              children: [
+                _LegendItem(AppColors.safe, '안전'),
+                _LegendItem(AppColors.caution, '주의'),
+                _LegendItem(AppColors.danger, '위험'),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         RouteRecommendationReasonCard(
           reason: reason,
@@ -1008,14 +1204,6 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
             ),
           ),
         ],
-        const SizedBox(height: 14),
-        FilledButton(
-          key: const ValueKey('search-again-button'),
-          onPressed: desktop
-              ? () => _openDesktopSearch(RouteSearchTarget.destination)
-              : () => widget.controller.editRoute(),
-          child: const Text('다시 검색하기'),
-        ),
       ],
     );
   }
@@ -1122,32 +1310,75 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
       key: const ValueKey('route-summary-metrics'),
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        for (final metric in metrics)
-          Expanded(child: _metric(metric.label, metric.value, metric.color)),
+        for (final (index, metric) in metrics.indexed)
+          Expanded(
+            child: index == 0
+                ? _metricWithTap(
+                    metric.label,
+                    metric.value,
+                    metric.color,
+                    () => setState(() => _legendExpanded = !_legendExpanded),
+                  )
+                : _metric(metric.label, metric.value, metric.color),
+          ),
       ],
     );
   }
 
-  Widget _metric(String label, String value, [Color color = AppColors.ink]) =>
-      Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: color,
+  Widget _metric(
+    String label,
+    String value, [
+    Color color = AppColors.ink,
+  ]) => _metricWithTap(label, value, color, null);
+
+  Widget _metricWithTap(
+    String label,
+    String value,
+    Color color,
+    VoidCallback? onTap,
+  ) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
             ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11, color: AppColors.muted),
-          ),
-        ],
-      );
+            if (onTap != null) ...[
+              const SizedBox(width: 2),
+              Icon(
+                _legendExpanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                size: 16,
+                color: AppColors.muted,
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 11, color: AppColors.muted),
+        ),
+      ],
+    );
+    if (onTap == null) return content;
+    return InkWell(
+      key: const ValueKey('toggle-safety-legend'),
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: content,
+    );
+  }
 
   String _count(int? value, String unit) =>
       value == null ? '정보 없음' : '$value$unit';
@@ -1159,6 +1390,30 @@ class _MetricData {
   final String label;
   final String value;
   final Color color;
+}
+
+class _LegendItem extends StatelessWidget {
+  const _LegendItem(this.color, this.label);
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 18,
+        height: 5,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(9),
+        ),
+      ),
+      const SizedBox(width: 5),
+      Text(label, style: const TextStyle(fontSize: 12)),
+    ],
+  );
 }
 
 class _StationLoadState extends StatelessWidget {

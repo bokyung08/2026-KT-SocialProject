@@ -2,28 +2,32 @@ import 'package:flutter/foundation.dart';
 
 import 'config/api_config.dart';
 import 'data/sample_places.dart';
+import 'models/favorite_route.dart';
 import 'models/place.dart';
 import 'models/route_result.dart';
 import 'repositories/api_route_repository.dart';
 import 'repositories/mock_route_repository.dart';
 import 'repositories/route_repository.dart';
+import 'services/local_history_store.dart';
 
 enum AppScreen { home, input, loading, result, info }
 
 enum RouteSearchTarget { start, destination }
 
 class AppController extends ChangeNotifier {
-  AppController({RouteRepository? repository})
+  AppController({RouteRepository? repository, LocalHistoryStore? historyStore})
     : repository =
           repository ??
           (ApiConfig.useMock
               ? MockRouteRepository()
-              : ApiRouteRepository(ApiConfig.baseUrl));
+              : ApiRouteRepository(ApiConfig.baseUrl)),
+      historyStore = historyStore ?? LocalHistoryStore();
 
   static const _minimumAnalysisDuration = Duration(milliseconds: 900);
   static const _completedStageHold = Duration(milliseconds: 220);
 
   final RouteRepository repository;
+  final LocalHistoryStore historyStore;
   AppScreen screen = AppScreen.home;
   Place? start;
   Place? destination;
@@ -32,6 +36,8 @@ class AppController extends ChangeNotifier {
   Place? rentalAccessOrigin;
   Place? rentalStationStart;
   final List<Place> recentPlaces = [];
+  final List<FavoriteRoute> favorites = [];
+  bool historyLoaded = false;
   List<RouteResult> routes = const [];
   int selectedRoute = 0;
   String? error;
@@ -43,6 +49,53 @@ class AppController extends ChangeNotifier {
   bool _disposed = false;
 
   bool get canAnalyze => start != null && destination != null;
+
+  Future<void> loadPersisted() async {
+    final loadedStart = await historyStore.loadRecentStart();
+    final loadedDestination = await historyStore.loadRecentDestination();
+    final loadedPlaces = await historyStore.loadRecentPlaces();
+    final loadedFavorites = await historyStore.loadFavorites();
+    if (_disposed) return;
+    recentRouteStart = loadedStart;
+    recentRouteDestination = loadedDestination;
+    recentPlaces
+      ..clear()
+      ..addAll(loadedPlaces);
+    favorites
+      ..clear()
+      ..addAll(loadedFavorites);
+    historyLoaded = true;
+    notifyListeners();
+  }
+
+  bool isFavorite(Place start, Place destination) => favorites.any(
+    (route) => route.id == FavoriteRoute.idFor(start, destination),
+  );
+
+  void toggleFavorite(Place start, Place destination) {
+    final id = FavoriteRoute.idFor(start, destination);
+    final existingIndex = favorites.indexWhere((route) => route.id == id);
+    if (existingIndex >= 0) {
+      favorites.removeAt(existingIndex);
+    } else {
+      favorites.insert(0, FavoriteRoute(id: id, start: start, destination: destination));
+    }
+    historyStore.saveFavorites(favorites);
+    notifyListeners();
+  }
+
+  void removeFavorite(String id) {
+    favorites.removeWhere((route) => route.id == id);
+    historyStore.saveFavorites(favorites);
+    notifyListeners();
+  }
+
+  void useFavorite(FavoriteRoute route) {
+    start = route.start;
+    destination = route.destination;
+    _clearRentalAccess();
+    notifyListeners();
+  }
 
   void show(AppScreen value) {
     if (screen == AppScreen.loading && value != AppScreen.loading) {
@@ -110,9 +163,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool get hasRecentRoute =>
+      recentRouteStart != null && recentRouteDestination != null;
+
   void useRecentRoute() {
-    start = recentRouteStart ?? samplePlaces.first;
-    destination = recentRouteDestination ?? samplePlaces[1];
+    if (!hasRecentRoute) return;
+    start = recentRouteStart;
+    destination = recentRouteDestination;
     _clearRentalAccess();
     notifyListeners();
   }
@@ -167,6 +224,7 @@ class AppController extends ChangeNotifier {
     recentPlaces.removeWhere((item) => item.position == value.position);
     recentPlaces.insert(0, value);
     if (recentPlaces.length > 6) recentPlaces.removeLast();
+    historyStore.saveRecentPlaces(recentPlaces);
   }
 
   bool _isCurrentAnalysis(int generation) =>
@@ -183,6 +241,7 @@ class AppController extends ChangeNotifier {
     final startedAt = DateTime.now();
     recentRouteStart = start;
     recentRouteDestination = destination;
+    historyStore.saveRecentRoute(recentRouteStart, recentRouteDestination);
     screen = AppScreen.loading;
     analysisResponseReady = false;
     error = null;
@@ -228,6 +287,7 @@ class AppController extends ChangeNotifier {
       destination = draftDestination;
       recentRouteStart = draftStart;
       recentRouteDestination = draftDestination;
+      historyStore.saveRecentRoute(draftStart, draftDestination);
       _clearRentalAccess();
       _remember(draftStart);
       _remember(draftDestination);

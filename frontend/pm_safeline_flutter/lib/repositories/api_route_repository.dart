@@ -80,7 +80,7 @@ class ApiRouteRepository implements RouteRepository {
         if (item is! Map) throw const FormatException('경로 항목 형식 오류');
         final route = RouteResult.fromJson(
           Map<String, dynamic>.from(item),
-          name: index == 0 ? '추천 경로' : '대안 경로 ${index + 1}',
+          name: index == 0 ? '추천 경로' : '대안 경로 $index',
         );
         if (kDebugMode) {
           debugPrint(

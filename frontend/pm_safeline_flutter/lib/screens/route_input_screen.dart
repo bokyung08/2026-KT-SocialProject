@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../app_controller.dart';
 import '../data/sample_places.dart';
+import '../models/place.dart';
 import '../models/place_search_result.dart';
 import '../services/geocoding_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/route_map.dart';
 
 class RouteInputScreen extends StatefulWidget {
   const RouteInputScreen({
@@ -50,6 +53,7 @@ class _RouteInputScreenState extends State<RouteInputScreen> {
   late _FieldSearchState _startSearch;
   late _FieldSearchState _destinationSearch;
   late bool _editingStart;
+  bool _suppressQueryChange = false;
 
   TextEditingController get _activeText =>
       _editingStart ? _startText : _destinationText;
@@ -98,6 +102,7 @@ class _RouteInputScreenState extends State<RouteInputScreen> {
   }
 
   void _onQueryChanged({required bool start, required String value}) {
+    if (_suppressQueryChange) return;
     final field = start ? _startSearch : _destinationSearch;
     final selected = start
         ? widget.controller.start
@@ -192,6 +197,7 @@ class _RouteInputScreenState extends State<RouteInputScreen> {
     final field = start ? _startSearch : _destinationSearch;
     field.reset();
     final place = result.toPlace();
+    _suppressQueryChange = true;
     if (start) {
       widget.controller.setStart(place);
       _startText.text = result.displayTitle;
@@ -199,6 +205,7 @@ class _RouteInputScreenState extends State<RouteInputScreen> {
       widget.controller.setDestination(place);
       _destinationText.text = result.displayTitle;
     }
+    _suppressQueryChange = false;
 
     if (widget.controller.start == null) {
       _activateField(true);
@@ -211,6 +218,97 @@ class _RouteInputScreenState extends State<RouteInputScreen> {
       setState(() {});
       FocusManager.instance.primaryFocus?.unfocus();
     }
+  }
+
+  void _selectFromMap(LatLng point) {
+    final start = _editingStart;
+    final field = start ? _startSearch : _destinationSearch;
+    field.reset();
+    final fallbackName =
+        '위도 ${point.latitude.toStringAsFixed(5)}, '
+        '경도 ${point.longitude.toStringAsFixed(5)}';
+    final place = Place('지도에서 선택한 위치', fallbackName, point);
+    _suppressQueryChange = true;
+    if (start) {
+      widget.controller.setStart(place);
+      _startText.text = place.name;
+    } else {
+      widget.controller.setDestination(place);
+      _destinationText.text = place.name;
+    }
+    _suppressQueryChange = false;
+
+    if (widget.controller.start == null) {
+      _activateField(true);
+    } else if (widget.controller.destination == null) {
+      _activateField(false);
+    } else {
+      widget.controller.routeSearchTarget = start
+          ? RouteSearchTarget.start
+          : RouteSearchTarget.destination;
+      setState(() {});
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+
+    _geocoding.reverseGeocode(point.latitude, point.longitude).then((result) {
+      if (!mounted || result == null) return;
+      final resolved = Place(result.name, result.address, point);
+      final current = start
+          ? widget.controller.start
+          : widget.controller.destination;
+      if (current?.position != point) return;
+      _suppressQueryChange = true;
+      if (start) {
+        widget.controller.setStart(resolved);
+        _startText.text = resolved.name;
+      } else {
+        widget.controller.setDestination(resolved);
+        _destinationText.text = resolved.name;
+      }
+      _suppressQueryChange = false;
+    });
+  }
+
+  Future<void> _openMapPicker() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final target = _editingStart ? '출발지' : '도착지';
+    final point = await showModalBottomSheet<LatLng>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * 0.75,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '지도에서 $target 선택',
+                      style: Theme.of(sheetContext).textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              key: const ValueKey('map-picker'),
+              child: RouteMap(
+                start: widget.controller.start?.position,
+                destination: widget.controller.destination?.position,
+                onMapTap: (tapped) => Navigator.pop(sheetContext, tapped),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (point != null) _selectFromMap(point);
   }
 
   void _clearField(bool start) {
@@ -315,7 +413,7 @@ class _RouteInputScreenState extends State<RouteInputScreen> {
                     ? '“$activeQuery” 검색 결과'
                     : activeQuery.isEmpty
                     ? '최근 검색 · 추천 장소'
-                    : '2글자 이상 입력하면 자동으로 검색해요',
+                    : '',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -374,10 +472,22 @@ class _RouteInputScreenState extends State<RouteInputScreen> {
         filled: true,
         fillColor: const Color(0xFFF0F0F3),
         prefixIcon: Icon(icon, color: start ? AppColors.ink : AppColors.brand),
-        suffixIconConstraints: const BoxConstraints(minWidth: 92, maxWidth: 96),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: 132,
+          maxWidth: 144,
+        ),
         suffixIcon: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              key: ValueKey('pick-on-map-${start ? "start" : "destination"}'),
+              tooltip: '지도에서 $label 선택',
+              onPressed: () {
+                _activateField(start);
+                _openMapPicker();
+              },
+              icon: const Icon(Icons.map_outlined, size: 19),
+            ),
             IconButton(
               tooltip: '$label 지우기',
               onPressed: () => _clearField(start),

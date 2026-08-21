@@ -3,7 +3,7 @@ import { defineConfig } from '@apps-in-toss/web-framework/config';
 export default defineConfig({
   appName: 'pmsafeline',
   brand: {
-    primaryColor: '#3182F6', // 화면에 노출될 앱의 기본 색상으로 바꿔주세요.
+    primaryColor: '#E8453C', // 길잇 브랜드 컬러 (AppColors.brand)
   },
   permissions: [],
   webBundleDir: 'dist',

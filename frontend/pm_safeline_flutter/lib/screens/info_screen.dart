@@ -24,7 +24,7 @@ class InfoScreen extends StatelessWidget {
         desktopPanel ? 24 : 20,
         desktopPanel ? 24 : 20,
         desktopPanel ? 24 : 20,
-        20,
+        desktopPanel ? 20 : SafeLineBottomNav.reservedHeight,
       ),
       children: [
         Text('서비스 정보', style: Theme.of(context).textTheme.headlineSmall),
@@ -66,6 +66,7 @@ class InfoScreen extends StatelessWidget {
       );
     }
     return Scaffold(
+      extendBody: true,
       body: content,
       bottomNavigationBar: SafeLineBottomNav(controller: controller, index: 1),
     );

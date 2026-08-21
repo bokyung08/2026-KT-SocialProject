@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pm_safeline_flutter/app.dart';
+import 'package:pm_safeline_flutter/widgets/bottom_nav.dart';
 import 'package:pm_safeline_flutter/widgets/route_map.dart';
 
 void main() {
@@ -11,7 +12,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('desktop-app-shell')), findsNothing);
     expect(find.byKey(const ValueKey('responsive-side-panel')), findsNothing);
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(SafeLineBottomNav), findsOneWidget);
     expect(find.text('새 경로 탐색'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -30,15 +31,22 @@ void main() {
 
       expect(find.byKey(const ValueKey('desktop-app-shell')), findsNothing);
       expect(find.byKey(const ValueKey('responsive-side-panel')), findsNothing);
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(SafeLineBottomNav), findsOneWidget);
 
       final scaffoldRect = tester.getRect(find.byType(Scaffold));
-      final navigationRect = tester.getRect(find.byType(NavigationBar));
+      final navigationRect = tester.getRect(
+        find.byKey(const ValueKey('floating-tab-bar')),
+      );
       final mapRect = tester.getRect(find.byType(RouteMap));
       expect(scaffoldRect.left, 0);
       expect(scaffoldRect.width, size.width);
-      expect(navigationRect.left, 0);
-      expect(navigationRect.width, size.width);
+      // 토스 미니앱 브랜딩 가이드: 하단에 붙는 바가 아니라 좌우 여백을 둔
+      // 플로팅 캡슐이어야 한다.
+      expect(navigationRect.left, greaterThan(0));
+      expect(navigationRect.width, lessThan(size.width));
+      expect(navigationRect.bottom, lessThan(size.height));
+      // 하단에서 살짝 띄운 것이지, 화면 가운데 떠 있으면 안 된다.
+      expect(size.height - navigationRect.bottom, lessThan(40));
       expect(mapRect.left, 20);
       expect(mapRect.right, size.width - 20);
       expect(tester.takeException(), isNull);
@@ -70,7 +78,7 @@ void main() {
           mapRect.width,
           closeTo(viewport.size.width - viewport.panelWidth, 1),
         );
-        expect(find.byType(NavigationBar), findsNothing);
+        expect(find.byType(SafeLineBottomNav), findsNothing);
         expect(
           find.byKey(const ValueKey('desktop-home-panel')),
           findsOneWidget,

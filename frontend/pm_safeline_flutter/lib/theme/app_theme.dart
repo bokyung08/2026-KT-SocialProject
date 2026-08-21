@@ -14,10 +14,6 @@ abstract final class AppColors {
 
 ThemeData buildAppTheme() => ThemeData(
   useMaterial3: true,
-  // 플랫폼별 VisualDensity.adaptivePlatformDensity 기본값을 쓰면 실제
-  // 모바일 기기(standard)와 데스크톱/웹 개발 환경(compact)에서 버튼 크기가
-  // 달라져 상단 바 등의 높이가 기기마다 들쭉날쭉해진다. 고정값으로 통일한다.
-  visualDensity: VisualDensity.standard,
   scaffoldBackgroundColor: AppColors.background,
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColors.brand,

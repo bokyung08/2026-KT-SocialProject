@@ -732,52 +732,65 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
     );
   }
 
-  Widget _buildMobileRouteHeader() => Row(
-    children: [
-      IconButton.filled(
-        key: const ValueKey('route-back-button'),
-        onPressed: () => widget.controller.show(AppScreen.home),
-        icon: const Icon(Icons.arrow_back),
-        tooltip: '메인으로',
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          elevation: 3,
-          shadowColor: Colors.black26,
-          child: InkWell(
-            key: const ValueKey('route-summary-pill'),
-            onTap: () => widget.controller.editRoute(),
+  // 상단 바 높이는 항상 이 값으로 고정한다. 예전엔 pill 안의 즐겨찾기
+  // IconButton 이 M3 기본 최소 크기 40 을 요구해서, 세로 패딩 11*2 까지
+  // 더해져 바가 62px 로 부풀었다(모바일 전용 위젯이라 PC 에선 안 보였다).
+  static const _mobileHeaderHeight = 44.0;
+
+  Widget _buildMobileRouteHeader() => SizedBox(
+    height: _mobileHeaderHeight,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox.square(
+          dimension: _mobileHeaderHeight,
+          child: IconButton.filled(
+            key: const ValueKey('route-back-button'),
+            padding: EdgeInsets.zero,
+            onPressed: () => widget.controller.show(AppScreen.home),
+            icon: const Icon(Icons.arrow_back, size: 20),
+            tooltip: '메인으로',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Material(
+            color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${widget.controller.start!.name} → '
-                      '${widget.controller.destination!.name}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+            elevation: 3,
+            shadowColor: Colors.black26,
+            child: InkWell(
+              key: const ValueKey('route-summary-pill'),
+              onTap: () => widget.controller.editRoute(),
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${widget.controller.start!.name} → '
+                        '${widget.controller.destination!.name}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
-                  ),
-                  const Icon(
-                    Icons.edit_outlined,
-                    size: 18,
-                    color: AppColors.muted,
-                  ),
-                  const SizedBox(width: 10),
-                  _favoriteButton(color: AppColors.muted, size: 20),
-                ],
+                    const Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: AppColors.muted,
+                    ),
+                    const SizedBox(width: 10),
+                    _favoriteButton(color: AppColors.muted, size: 20),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 
   Widget _favoriteButton({Color color = Colors.black, double size = 24}) {
@@ -953,7 +966,10 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
           constraints: BoxConstraints(
             maxHeight: _dashboardDragHeight ?? (_mapFocusMode ? 88 : 390),
           ),
-          padding: EdgeInsets.all(_mapFocusMode ? 12 : 16),
+          // 펼친 상태에선 첫 줄이 드래그 핸들이라 위쪽 여백을 핸들이 대신한다.
+          padding: _mapFocusMode
+              ? const EdgeInsets.all(12)
+              : const EdgeInsets.fromLTRB(16, 4, 16, 16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(22),
@@ -1050,9 +1066,11 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
     onVerticalDragCancel: () {
       setState(() => _dashboardDragHeight = null);
     },
+    // 이제 타이틀 Row 위에 별도 줄로 놓이므로, 높이가 그대로 카드 상단
+    // 여백이 된다. 드래그 타깃은 유지하면서 내용이 밀리지 않게 낮춘다.
     child: const SizedBox(
       width: 56,
-      height: 32,
+      height: 26,
       child: Center(
         child: SizedBox(
           width: 36,
@@ -1124,42 +1142,35 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Stack(
-          alignment: Alignment.topCenter,
+        // 핸들은 타이틀/배지 Row 위(세로로 맨 위)에 별도 줄로 놓는다. Row 에
+        // Stack 으로 겹쳐두면 Stack 높이를 핸들이 결정해버려 정렬을 바꿔도
+        // 바가 움직이지 않았다. Column 이 카드 폭 전체를 차지하므로 Center
+        // 만으로 카드 기준 정확한 가로 중앙이 된다.
+        if (!desktop)
+          Align(alignment: Alignment.topCenter, child: _dashboardDragHandle()),
+        Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    route.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFDEDEC),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _routeTypeLabel(widget.controller.selectedRoute),
-                    style: const TextStyle(
-                      color: AppColors.brand,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+            Expanded(
+              child: Text(
+                route.name,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
-            // 타이틀/배지 Row 위에 겹쳐서 카드 폭 기준 정확한 가로 중앙에,
-            // 세로로는 이 영역(추천 배지 칼럼) 맨 위에 붙도록 배치한다
-            // (Row 안에 두면 타이틀·배지 사이 남는 공간의 중앙이라 카드
-            // 전체 기준으로는 안 맞았다).
-            if (!desktop) _dashboardDragHandle(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDEDEC),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                _routeTypeLabel(widget.controller.selectedRoute),
+                style: const TextStyle(
+                  color: AppColors.brand,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ],
         ),
         if (widget.controller.routes.length > 1) ...[
@@ -1345,12 +1356,19 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: color,
+            // 좁은 화면에선 '예상 시간' 값이 칸보다 길어져 Row 가 넘쳤다.
+            // 칸 안에서 줄어들 수 있게 Flexible 로 감싼다.
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
               ),
             ),
             if (onTap != null) ...[

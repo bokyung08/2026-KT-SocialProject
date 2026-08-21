@@ -966,10 +966,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
           constraints: BoxConstraints(
             maxHeight: _dashboardDragHeight ?? (_mapFocusMode ? 88 : 390),
           ),
-          // 펼친 상태에선 첫 줄이 드래그 핸들이라 위쪽 여백을 핸들이 대신한다.
-          padding: _mapFocusMode
-              ? const EdgeInsets.all(12)
-              : const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          padding: EdgeInsets.all(_mapFocusMode ? 12 : 16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(22),
@@ -1066,13 +1063,16 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
     onVerticalDragCancel: () {
       setState(() => _dashboardDragHeight = null);
     },
-    // 이제 타이틀 Row 위에 별도 줄로 놓이므로, 높이가 그대로 카드 상단
-    // 여백이 된다. 드래그 타깃은 유지하면서 내용이 밀리지 않게 낮춘다.
+    // 타이틀 Row 에 겹쳐 놓이므로 세로 공간을 차지하지 않는다. 박스는 드래그
+    // 타깃 크기이고, 실제 바는 그 안에서 위쪽에 붙어 타이틀 글자 윗선과
+    // 나란히 온다.
     child: const SizedBox(
       width: 56,
       height: 26,
-      child: Center(
+      child: Align(
+        alignment: Alignment.topCenter,
         child: SizedBox(
+          key: ValueKey('mobile-dashboard-handle-bar'),
           width: 36,
           height: 4,
           child: DecoratedBox(
@@ -1142,35 +1142,52 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 핸들은 타이틀/배지 Row 위(세로로 맨 위)에 별도 줄로 놓는다. Row 에
-        // Stack 으로 겹쳐두면 Stack 높이를 핸들이 결정해버려 정렬을 바꿔도
-        // 바가 움직이지 않았다. Column 이 카드 폭 전체를 차지하므로 Center
-        // 만으로 카드 기준 정확한 가로 중앙이 된다.
-        if (!desktop)
-          Align(alignment: Alignment.topCenter, child: _dashboardDragHandle()),
-        Row(
+        Stack(
           children: [
-            Expanded(
-              child: Text(
-                route.name,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+            // 사이징 기준은 이 Row 하나뿐이다. 핸들은 Positioned 라 Stack
+            // 높이에 영향을 주지 않으므로 세로 공간을 전혀 차지하지 않고,
+            // top: 0 이라 바가 타이틀 글자 윗선과 나란히 놓인다.
+            // start 정렬이라야 타이틀 글자 윗선이 Row 윗선과 같아진다(배지가
+            // 더 높아서 center 로 두면 타이틀만 3.5px 내려가 어긋났다).
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    route.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDEDEC),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    _routeTypeLabel(widget.controller.selectedRoute),
+                    style: const TextStyle(
+                      color: AppColors.brand,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFDEDEC),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                _routeTypeLabel(widget.controller.selectedRoute),
-                style: const TextStyle(
-                  color: AppColors.brand,
-                  fontWeight: FontWeight.w700,
+            if (!desktop)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: _dashboardDragHandle(),
                 ),
               ),
-            ),
           ],
         ),
         if (widget.controller.routes.length > 1) ...[

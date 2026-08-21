@@ -759,6 +759,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
                     child: Text(
                       '${widget.controller.start!.name} → '
                       '${widget.controller.destination!.name}',
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
@@ -1124,7 +1125,7 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Stack(
-          alignment: Alignment.center,
+          alignment: Alignment.topCenter,
           children: [
             Row(
               children: [
@@ -1154,7 +1155,8 @@ class _RouteResultScreenState extends State<RouteResultScreen> {
                 ),
               ],
             ),
-            // 타이틀/배지 Row 위에 겹쳐서 카드 폭 기준 정확한 정중앙에 온다
+            // 타이틀/배지 Row 위에 겹쳐서 카드 폭 기준 정확한 가로 중앙에,
+            // 세로로는 이 영역(추천 배지 칼럼) 맨 위에 붙도록 배치한다
             // (Row 안에 두면 타이틀·배지 사이 남는 공간의 중앙이라 카드
             // 전체 기준으로는 안 맞았다).
             if (!desktop) _dashboardDragHandle(),
